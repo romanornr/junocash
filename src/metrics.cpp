@@ -1021,16 +1021,15 @@ void ThreadShowMetricsScreen()
         }
 #endif
 
-        // Clear screen
-        std::cout << "\e[2J";
-
-        // Beautiful Header
+        // Initial screen setup: clear and draw header
+        std::cout << "\e[2J\e[H";  // Clear screen and move to home
         drawBoxTop("");
         drawCentered("Juno Cash", "\e[1;33m");
         drawCentered("Privacy Money for All", "\e[1;36m");
         drawCentered(FormatFullVersion() + " - " + WhichNetwork() + " - RandomX", "\e[0;37m");
         drawBoxBottom();
         std::cout << std::endl;
+        std::cout << "\e[s" << std::flush;  // Save cursor position (after header)
     }
 
     while (true) {
@@ -1061,8 +1060,8 @@ void ThreadShowMetricsScreen()
         }
 
         if (isScreen) {
-            // Erase below current position
-            std::cout << "\e[J" << std::flush;
+            // Restore cursor to position after header and clear rest of screen
+            std::cout << "\e[u\e[J" << std::flush;
         }
 
         // Miner status
@@ -1131,9 +1130,7 @@ void ThreadShowMetricsScreen()
             MilliSleep(200);
         }
 
-        if (isScreen) {
-            // Return to the top of the updating section
-            std::cout << "\e[" << lines << "A" << std::flush;
-        }
+        // Screen will be redrawn from home position at start of next loop
+        // No need to reposition cursor
     }
 }
