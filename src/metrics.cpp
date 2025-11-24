@@ -926,25 +926,21 @@ static void promptForPercentage(int screenHeight)
             updateDonationPercentage(percentage);
             std::cout << "\e[" << inputRow << ";1H\e[K";  // Clear and reposition
             if (percentage == 0) {
-                std::cout << "Donations disabled. Press any key..." << std::flush;
+                std::cout << "✓ Donations disabled" << std::flush;
             } else {
-                std::cout << "Donation set to " << percentage << "%. Press any key..." << std::flush;
+                std::cout << "✓ Donation set to " << percentage << "%" << std::flush;
             }
         } else {
             std::cout << "\e[" << inputRow << ";1H\e[K";
-            std::cout << "Invalid percentage. Press any key..." << std::flush;
+            std::cout << "✗ Invalid percentage (must be 0-100)" << std::flush;
         }
     } catch (...) {
         std::cout << "\e[" << inputRow << ";1H\e[K";
-        std::cout << "Invalid input. Press any key..." << std::flush;
+        std::cout << "✗ Invalid input (not a number)" << std::flush;
     }
 
-    // Wait for any keypress
-    char c;
-    ssize_t result = read(STDIN_FILENO, &c, 1);
-    (void)result;  // Ignore return value
-
-    // Clear input area
+    // Brief pause to show confirmation, then clear
+    MilliSleep(800);
     std::cout << "\e[" << inputRow << ";1H\e[K" << std::flush;
 
 #ifndef WIN32
@@ -1005,22 +1001,18 @@ static void promptForThreads(int screenHeight)
                 LogPrintf("User set mining threads to %d (will apply when mining starts)\n", threads);
             }
             std::cout << "\e[" << inputRow << ";1H\e[K";  // Clear and reposition
-            std::cout << "Mining threads set to " << threads << ". Press any key..." << std::flush;
+            std::cout << "✓ Mining threads set to " << threads << std::flush;
         } else {
             std::cout << "\e[" << inputRow << ";1H\e[K";
-            std::cout << "Invalid thread count. Press any key..." << std::flush;
+            std::cout << "✗ Invalid thread count (must be 1-" << maxThreads << ")" << std::flush;
         }
     } catch (...) {
         std::cout << "\e[" << inputRow << ";1H\e[K";
-        std::cout << "Invalid input. Press any key..." << std::flush;
+        std::cout << "✗ Invalid input (not a number)" << std::flush;
     }
 
-    // Wait for any keypress
-    char c;
-    ssize_t result = read(STDIN_FILENO, &c, 1);
-    (void)result;  // Ignore return value
-
-    // Clear input area
+    // Brief pause to show confirmation, then clear
+    MilliSleep(800);
     std::cout << "\e[" << inputRow << ";1H\e[K" << std::flush;
 
 #ifndef WIN32
