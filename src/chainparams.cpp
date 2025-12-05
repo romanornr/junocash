@@ -176,7 +176,7 @@ public:
         // Juno Cash: No funding streams (0% dev tax)
 
         // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x6df8b1d3e");
+        consensus.nMinimumChainWork = uint256S("0xecc453bf9");
 
         /**
          * Network magic bytes for Juno Cash - derived from Bitcoin block 919123 hash
@@ -210,13 +210,14 @@ public:
         fMineBlocksOnDemand = false;
         fTestnetToBeDeprecatedFieldRPC = false;
 
-        // Juno Cash: Reset checkpoint data for new chain
+        // Juno Cash: Checkpoint data
         checkpointData = (CCheckpointData) {
             boost::assign::map_list_of
-            (0, consensus.hashGenesisBlock),
-            0,  // UNIX timestamp of last checkpoint block
-            0,  // total number of transactions between genesis and last checkpoint
-            0   // estimated number of transactions per day after checkpoint
+            (0, consensus.hashGenesisBlock)
+            (29453, uint256S("0x000000460b68ba29bc26af81f40d9ff798afbcac35ae3db80bc12cfaf78b9beb")),
+            1764902523,  // UNIX timestamp of last checkpoint block
+            29484,       // total number of transactions between genesis and last checkpoint
+            720          // estimated number of transactions per day after checkpoint
         };
 
         // Juno Cash: Reset Sprout value pool checkpoint (no Sprout activity on new chain)
