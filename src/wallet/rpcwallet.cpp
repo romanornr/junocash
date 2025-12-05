@@ -5233,27 +5233,24 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() < 2 || params.size() > 6)
+    if (fHelp || params.size() < 2 || params.size() > 5)
         throw runtime_error(
-            "z_shieldcoinbase \"fromaddress\" \"tozaddress\" ( fee ) ( limit ) ( memo ) ( privacyPolicy )\n"
-            "\nShield transparent coinbase funds by sending to a shielded zaddr.  This is an asynchronous operation and utxos"
-            "\nselected for shielding will be locked.  If there is an error, they are unlocked.  The RPC call `listlockunspent`"
-            "\ncan be used to return a list of locked utxos.  The number of coinbase utxos selected for shielding can be limited"
+            "z_shieldcoinbase \"fromaddress\" \"toaddress\" ( fee ) ( limit ) ( memo )\n"
+            "\nShield transparent coinbase funds by sending to an Orchard address. This is an asynchronous operation and utxos"
+            "\nselected for shielding will be locked. If there is an error, they are unlocked. The RPC call `listlockunspent`"
+            "\ncan be used to return a list of locked utxos. The number of coinbase utxos selected for shielding can be limited"
             "\nby the caller. Any limit is constrained by the consensus rule defining a maximum"
             "\ntransaction size of "
-            + strprintf("%d bytes before Sapling, and %d bytes once Sapling activates.", MAX_TX_SIZE_BEFORE_SAPLING, MAX_TX_SIZE_AFTER_SAPLING)
+            + strprintf("%d bytes.", MAX_TX_SIZE_AFTER_SAPLING)
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
             "1. \"fromaddress\"         (string, required) The address is a taddr or \"*\" for all taddrs belonging to the wallet.\n"
-            "2. \"toaddress\"           (string, required) The address is a zaddr.\n"
+            "2. \"toaddress\"           (string, required) A Unified Address with Orchard receiver.\n"
             "3. fee                   (numeric, optional, default=null) The fee amount in " + CURRENCY_UNIT + " to attach to this transaction. The default behavior\n"
             "                         is to use a fee calculated according to ZIP 317.\n"
             "4. limit                 (numeric, optional, default="
-            + strprintf("%d", SHIELD_COINBASE_DEFAULT_LIMIT) + ") Limit on the maximum number of utxos to shield.  Set to 0 to use as many as will fit in the transaction.\n"
+            + strprintf("%d", SHIELD_COINBASE_DEFAULT_LIMIT) + ") Limit on the maximum number of utxos to shield. Set to 0 to use as many as will fit in the transaction.\n"
             "5. \"memo\"                (string, optional) Encoded as hex. This will be stored in the memo field of the new note.\n"
-            "6. privacyPolicy         (string, optional, default=\"AllowRevealedSenders\") Policy for what information leakage is acceptable.\n"
-            "                         This allows the same values as z_sendmany, but only \"AllowRevealedSenders\" and \"AllowLinkingAccountAddresses\"\n"
-            "                         are relevant.\n"
             "\nResult:\n"
             "{\n"
             "  \"remainingUTXOs\": xxx    (numeric) Number of coinbase utxos still available for shielding.\n"
@@ -5263,8 +5260,8 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
             "  \"opid\": xxx          (string) An operationid to pass to z_getoperationstatus to get the result of the operation.\n"
             "}\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_shieldcoinbase", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" \"ztfaW34Gj9FrnGUEf833ywDVL62NWXBM81u6EQnM6VR45eYnXhwztecW1SjxA7JrmAXKJhxhj3vDNEpVCQoSvVoSpmbhtjf\"")
-            + HelpExampleRpc("z_shieldcoinbase", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\", \"ztfaW34Gj9FrnGUEf833ywDVL62NWXBM81u6EQnM6VR45eYnXhwztecW1SjxA7JrmAXKJhxhj3vDNEpVCQoSvVoSpmbhtjf\"")
+            + HelpExampleCli("z_shieldcoinbase", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" \"<unified_address_with_orchard_receiver>\"")
+            + HelpExampleRpc("z_shieldcoinbase", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\", \"<unified_address_with_orchard_receiver>\"")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -5274,11 +5271,11 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
     const auto consensus = chainparams.GetConsensus();
     int nextBlockHeight = chainActive.Height() + 1;
 
-    // This API cannot be used to create coinbase shielding transactions before Sapling
-    // activation.
-    if (!consensus.NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING)) {
+    // This API cannot be used to create coinbase shielding transactions before NU5
+    // activation (Orchard is required).
+    if (!consensus.NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_NU5)) {
         throw JSONRPCError(
-            RPC_INVALID_PARAMETER, "Cannot create shielded transactions before Sapling has activated");
+            RPC_INVALID_PARAMETER, "Cannot shield coinbase before NU5 has activated");
     }
 
     std::optional<Memo> memo;
@@ -5286,14 +5283,8 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
         memo = ParseMemo(params[4]);
     }
 
-    auto strategy =
-        ResolveTransactionStrategy(
-                ReifyPrivacyPolicy(
-                        PrivacyPolicy::AllowRevealedSenders,
-                        params.size() > 5 ? std::optional(params[5].get_str()) : std::nullopt),
-                // This has identical behavior to `AllowRevealedSenders` for this operation, but
-                // technically, this is what “LegacyCompat” means, so just for consistency.
-                PrivacyPolicy::AllowFullyTransparent);
+    // For Orchard-only shielding, we always allow revealed senders (transparent inputs)
+    auto strategy = TransactionStrategy(PrivacyPolicy::AllowRevealedSenders);
 
     // Validate the from address
     auto fromaddress = params[0].get_str();
@@ -5353,6 +5344,33 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
     if (!destaddress.has_value()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ") + destStr);
     }
+
+    // Validate destination is a Unified Address with Orchard receiver
+    examine(destaddress.value(), match {
+        [](const CKeyID&) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Cannot shield coinbase output to a transparent address.");
+        },
+        [](const CScriptID&) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Cannot shield coinbase output to a transparent address.");
+        },
+        [](const libzcash::SproutPaymentAddress&) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Sprout addresses are not supported. Use a Unified Address with Orchard receiver.");
+        },
+        [](const libzcash::SaplingPaymentAddress&) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Sapling addresses are not supported. Use a Unified Address with Orchard receiver.");
+        },
+        [](const libzcash::UnifiedAddress& ua) {
+            if (!ua.GetOrchardReceiver().has_value()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    "Unified Address must contain an Orchard receiver.");
+            }
+        },
+        [](const auto&) { }
+    });
 
     std::optional<CAmount> nFee;
     if (params.size() > 2 && !params[2].isNull()) {

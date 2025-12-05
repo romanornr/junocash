@@ -62,12 +62,27 @@ AsyncRPCOperation_shieldcoinbase::AsyncRPCOperation_shieldcoinbase(
     assert(!fee.has_value() || MoneyRange(fee.value()));
     assert(ztxoSelector.RequireSpendingKeys());
 
+    // Validate destination is a Unified Address with Orchard receiver (defense in depth)
     examine(toAddress_, match {
         [](const CKeyID&) {
-            throw JSONRPCError(RPC_VERIFY_REJECTED, "Cannot shield coinbase output to a p2pkh address.");
+            throw JSONRPCError(RPC_VERIFY_REJECTED, "Cannot shield coinbase output to a transparent address.");
         },
         [](const CScriptID&) {
-            throw JSONRPCError(RPC_VERIFY_REJECTED, "Cannot shield coinbase output to a p2sh address.");
+            throw JSONRPCError(RPC_VERIFY_REJECTED, "Cannot shield coinbase output to a transparent address.");
+        },
+        [](const SproutPaymentAddress&) {
+            throw JSONRPCError(RPC_VERIFY_REJECTED,
+                "Sprout addresses are not supported. Use a Unified Address with Orchard receiver.");
+        },
+        [](const SaplingPaymentAddress&) {
+            throw JSONRPCError(RPC_VERIFY_REJECTED,
+                "Sapling addresses are not supported. Use a Unified Address with Orchard receiver.");
+        },
+        [](const UnifiedAddress& ua) {
+            if (!ua.GetOrchardReceiver().has_value()) {
+                throw JSONRPCError(RPC_VERIFY_REJECTED,
+                    "Unified Address must contain an Orchard receiver.");
+            }
         },
         [](const auto&) { },
     });
@@ -224,8 +239,6 @@ uint256 AsyncRPCOperation_shieldcoinbase::main_impl(CWallet& wallet) {
                  FormatMoney(spendable.GetSaplingTotal() + spendable.GetOrchardTotal()));
         LogPrint("zrpc", "%s: total transparent output: %s\n", getId(),
                  FormatMoney(payments.GetTransparentTotal()));
-        LogPrint("zrpcunsafe", "%s: total shielded Sapling output: %s\n", getId(),
-                 FormatMoney(payments.GetSaplingTotal()));
         LogPrint("zrpcunsafe", "%s: total shielded Orchard output: %s\n", getId(),
                  FormatMoney(payments.GetOrchardTotal()));
         LogPrint("zrpcunsafe", "%s: requested fee: %s\n", getId(),

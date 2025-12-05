@@ -1568,6 +1568,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_parameters)
     ), runtime_error);
 
     // Test constructor of AsyncRPCOperation_shieldcoinbase
+    // Juno Cash only supports Orchard addresses, so Sprout addresses must be rejected
     KeyIO keyIO(Params());
     WalletTxBuilder builder(Params(), minRelayTxFee);
     UniValue retValue;
@@ -1583,10 +1584,12 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_parameters)
             TransparentCoinbasePolicy::Allow,
             UnifiedAccountSpendingPolicy::ShieldedWithSingleTransparentAddress).value();
 
+    // Test that Sprout addresses are rejected
     try {
         std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(std::move(builder), selector, testnetzaddr, std::nullopt, PrivacyPolicy::AllowRevealedSenders, SHIELD_COINBASE_DEFAULT_LIMIT, 1));
+        BOOST_FAIL("Expected exception for Sprout address");
     } catch (const UniValue& objError) {
-        BOOST_CHECK( find_error(objError, "Empty inputs"));
+        BOOST_CHECK( find_error(objError, "Sprout addresses are not supported"));
     }
 }
 

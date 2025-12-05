@@ -179,7 +179,7 @@ static const CRPCConvertTable rpcCvtTable =
     { "z_sendmany",                  {{s, o}, {o, o, s}} },
     { "z_setmigration",              {{o}, {}} },
     { "z_getmigrationstatus",        {{}, {o}} },
-    { "z_shieldcoinbase",            {{s, s}, {o, o, n, s}} },
+    { "z_shieldcoinbase",            {{s, s}, {o, o, n}} },
     { "z_mergetoaddress",            {{o, s}, {o, o, o, n, s}} },
     { "z_listoperationids",          {{}, {s}} },
     { "z_getnotescount",             {{}, {o, o}} },
