@@ -693,25 +693,6 @@ WalletUAGenerationResult CWallet::GenerateUnifiedAddress(
         return UnifiedAddressGenerationError::ShieldedReceiverNotFound;
     }
 
-    // The wallet must be unlocked in order to generate new transparent UA
-    // receivers, because we need to be able to add the secret key for the
-    // external child address at the diversifier index to the wallet's
-    // transparent backend in order to be able to detect transactions as
-    // ours rather than considering them as watch-only.
-    bool hasTransparent = receiverTypes.find(ReceiverType::P2PKH) != receiverTypes.end();
-    if (hasTransparent) {
-        // A preemptive check to ensure that the user has not specified an
-        // invalid transparent child index. If we search from a valid transparent
-        // child index into invalid child index space.
-        if (j.has_value() && !j.value().ToTransparentChildIndex().has_value()) {
-            return UnifiedAddressGenerationError::InvalidTransparentChildIndex;
-        }
-
-        if (IsCrypted() || !GetMnemonicSeed().has_value()) {
-            return WalletUAGenerationError::WalletEncrypted;
-        }
-    }
-
     auto ufvk = GetUnifiedFullViewingKeyByAccount(accountId);
     if (ufvk.has_value()) {
         auto ufvkid = ufvk.value().GetKeyID();
@@ -764,48 +745,6 @@ WalletUAGenerationResult CWallet::GenerateUnifiedAddress(
         auto address = std::get<std::pair<UnifiedAddress, diversifier_index_t>>(addressGenerationResult);
 
         assert(mapUfvkAddressMetadata[ufvkid].SetReceivers(address.second, receiverTypes));
-        if (hasTransparent) {
-            // We must construct and add the transparent spending key associated
-            // with the external and internal transparent child addresses to the
-            // transparent keystore. This call to `value` will succeed because
-            // this key must have been previously generated.
-            auto usk = GenerateUnifiedSpendingKeyForAccount(accountId).value();
-            auto accountKey = usk.GetTransparentKey();
-            // this .value is known to be safe from the earlier check
-            auto childIndex = address.second.ToTransparentChildIndex().value();
-            auto externalKey = accountKey.DeriveExternalSpendingKey(childIndex);
-
-            if (!externalKey.has_value()) {
-                return UnifiedAddressGenerationError::NoAddressForDiversifier;
-            }
-
-            AddTransparentSecretKey(
-                mnemonicHDChain.value().GetSeedFingerprint(),
-                externalKey.value(),
-                transparent::AccountKey::KeyPath(BIP44CoinType(), accountId, true, childIndex)
-            );
-
-            // We do not add the change address for the transparent key, because
-            // we do not send transparent change when using unified accounts.
-
-            // Writing this data is handled by `CWalletDB::WriteUnifiedAddressMetadata` below.
-            assert(
-                CCryptoKeyStore::AddTransparentReceiverForUnifiedAddress(
-                    ufvkid, address.second, address.first
-                )
-            );
-        }
-
-        // If the address has a Sapling component, add an association between
-        // that address and the Sapling IVK corresponding to the ufvk
-        auto hasSapling = receiverTypes.find(ReceiverType::Sapling) != receiverTypes.end();
-        if (hasSapling) {
-            auto dfvk = ufvk.value().GetSaplingKey();
-            auto saplingAddress = address.first.GetSaplingReceiver();
-            assert (dfvk.has_value() && saplingAddress.has_value());
-
-            AddSaplingPaymentAddress(dfvk.value().ToIncomingViewingKey(), saplingAddress.value());
-        }
 
         // If the address has an Orchard component, add an association between
         // that address and the Orchard IVK corresponding to the ufvk
