@@ -33,17 +33,34 @@ JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 RELEASE_DIR="${REPO_ROOT}/release"
 SDK_PATH="${REPO_ROOT}/depends/SDKs"
 
-# Version detection - use PACKAGE_VERSION from generated config if available
-if [ -f "${REPO_ROOT}/src/config/bitcoin-config.h" ]; then
-    FULL_VERSION=$(grep "^#define PACKAGE_VERSION" "${REPO_ROOT}/src/config/bitcoin-config.h" | sed 's/.*"\(.*\)".*/\1/' || echo "unknown")
-fi
-# Fallback: calculate version from configure.ac defines
-if [ -z "$FULL_VERSION" ] || [ "$FULL_VERSION" = "unknown" ]; then
-    VERSION=$(grep "define(_CLIENT_VERSION_MAJOR" "${REPO_ROOT}/configure.ac" | sed 's/[^0-9]*//g' || echo "0")
-    VERSION_MINOR=$(grep "define(_CLIENT_VERSION_MINOR" "${REPO_ROOT}/configure.ac" | sed 's/[^0-9]*//g' || echo "0")
-    VERSION_REVISION=$(grep "define(_CLIENT_VERSION_REVISION" "${REPO_ROOT}/configure.ac" | sed 's/[^0-9]*//g' || echo "0")
-    FULL_VERSION="${VERSION}.${VERSION_MINOR}.${VERSION_REVISION}"
-fi
+# Version detection - calculate from configure.ac defines with BUILD suffix logic
+# This replicates the m4 macros in configure.ac to get the correct version string
+calculate_version() {
+    local MAJOR=$(grep "define(_CLIENT_VERSION_MAJOR" "${REPO_ROOT}/configure.ac" | sed 's/[^0-9]*//g' || echo "0")
+    local MINOR=$(grep "define(_CLIENT_VERSION_MINOR" "${REPO_ROOT}/configure.ac" | sed 's/[^0-9]*//g' || echo "0")
+    local REVISION=$(grep "define(_CLIENT_VERSION_REVISION" "${REPO_ROOT}/configure.ac" | sed 's/[^0-9]*//g' || echo "0")
+    local BUILD=$(grep "^define(_CLIENT_VERSION_BUILD" "${REPO_ROOT}/configure.ac" | sed 's/[^0-9]*//g' || echo "0")
+
+    # Replicate m4 logic for version suffix:
+    # BUILD < 25: beta(BUILD+1)
+    # BUILD 25-49: rc(BUILD-24)
+    # BUILD == 50: stable (no suffix)
+    # BUILD > 50: -(BUILD-50)
+    local SUFFIX=""
+    if [ "$BUILD" -lt 25 ]; then
+        SUFFIX="-beta$((BUILD + 1))"
+    elif [ "$BUILD" -lt 50 ]; then
+        SUFFIX="-rc$((BUILD - 24))"
+    elif [ "$BUILD" -eq 50 ]; then
+        SUFFIX=""
+    else
+        SUFFIX="-$((BUILD - 50))"
+    fi
+
+    echo "${MAJOR}.${MINOR}.${REVISION}${SUFFIX}"
+}
+
+FULL_VERSION=$(calculate_version)
 
 # Print functions
 print_info() {
@@ -561,7 +578,7 @@ INSTALLEOF
             --source "$PKG_DIR" \
             --output "$RELEASE_DIR" \
             --version "$FULL_VERSION" \
-            --name "junocash-${FULL_VERSION}-${PLATFORM_NAME}"
+            --name "junocash-${FULL_VERSION}-${PLATFORM_NAME}-unsigned"
     else
         print_warn "create-dmg.sh not found, skipping DMG creation"
     fi
