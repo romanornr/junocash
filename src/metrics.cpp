@@ -38,6 +38,20 @@
 #endif
 #include <unistd.h>
 
+// Box-drawing characters (UTF-8)
+static const char* BOX_HORIZONTAL = "\xe2\x94\x80";      // ─ (U+2500)
+static const char* BOX_VERTICAL = "\xe2\x94\x82";        // │ (U+2502)
+static const char* BOX_TOP_LEFT = "\xe2\x94\x8c";        // ┌ (U+250C)
+static const char* BOX_TOP_RIGHT = "\xe2\x94\x90";       // ┐ (U+2510)
+static const char* BOX_BOTTOM_LEFT = "\xe2\x94\x94";     // └ (U+2514)
+static const char* BOX_BOTTOM_RIGHT = "\xe2\x94\x98";    // ┘ (U+2518)
+static const char* BOX_VERTICAL_RIGHT = "\xe2\x94\x9c";  // ├ (U+251C)
+static const char* BOX_VERTICAL_LEFT = "\xe2\x94\xa4";   // ┤ (U+2524)
+static const char* BOX_PROGRESS_FILLED = "\xe2\x96\x88"; // █ (U+2588)
+static const char* BOX_PROGRESS_EMPTY = "\xe2\x96\x91";  // ░ (U+2591)
+static const char* SYMBOL_CHECK = "\xe2\x9c\x93";        // ✓ (U+2713)
+static const char* SYMBOL_CROSS = "\xe2\x9c\x97";        // ✗ (U+2717)
+
 void AtomicTimer::start()
 {
     std::unique_lock<std::mutex> lock(mtx);
@@ -386,7 +400,7 @@ static size_t visibleLength(const std::string& str) {
 }
 
 // Draw a horizontal line with optional title
-static void drawLine(const std::string& title = "", const std::string& left = "├", const std::string& right = "┤", const std::string& fill = "─", int width = 72) {
+static void drawLine(const std::string& title, const char* left, const char* right, const char* fill, int width = 72) {
     std::cout << left;
     if (!title.empty()) {
         int titleLen = title.length() + 2; // +2 for spaces
@@ -403,12 +417,12 @@ static void drawLine(const std::string& title = "", const std::string& left = "�
 
 // Draw top border of box
 static void drawBoxTop(const std::string& title = "", int width = 72) {
-    drawLine(title, "┌", "┐", "─", width);
+    drawLine(title, BOX_TOP_LEFT, BOX_TOP_RIGHT, BOX_HORIZONTAL, width);
 }
 
 // Draw bottom border of box
 static void drawBoxBottom(int width = 72) {
-    drawLine("", "└", "┘", "─", width);
+    drawLine("", BOX_BOTTOM_LEFT, BOX_BOTTOM_RIGHT, BOX_HORIZONTAL, width);
 }
 
 // Draw a data row inside a box with label and value
@@ -417,9 +431,9 @@ static void drawRow(const std::string& label, const std::string& value, int widt
     int valueLen = visibleLength(value);
     int padding = width - labelLen - valueLen - 2; // -2 for the two spaces (after | and before |)
 
-    std::cout << "│ \e[1;36m" << label << "\e[0m";
+    std::cout << BOX_VERTICAL << " \e[1;36m" << label << "\e[0m";
     for (int i = 0; i < padding; i++) std::cout << " ";
-    std::cout << "\e[1;33m" << value << "\e[0m │" << std::endl;
+    std::cout << "\e[1;33m" << value << "\e[0m " << BOX_VERTICAL << std::endl;
 }
 
 // Draw a centered text line in a box
@@ -428,23 +442,23 @@ static void drawCentered(const std::string& text, const std::string& color = "",
     int padding = (width - textLen) / 2;
     int rightPad = width - textLen - padding;
 
-    std::cout << "│";
+    std::cout << BOX_VERTICAL;
     for (int i = 0; i < padding; i++) std::cout << " ";
     if (!color.empty()) std::cout << color;
     std::cout << text;
     if (!color.empty()) std::cout << "\e[0m";
     for (int i = 0; i < rightPad; i++) std::cout << " ";
-    std::cout << "│" << std::endl;
+    std::cout << BOX_VERTICAL << std::endl;
 }
 
 // Draw a progress bar
 static void drawProgressBar(int percent, int width = 68) {
     int filled = (percent * width) / 100;
-    std::cout << "│ \e[1;32m";
-    for (int i = 0; i < filled; i++) std::cout << "█";
+    std::cout << BOX_VERTICAL << " \e[1;32m";
+    for (int i = 0; i < filled; i++) std::cout << BOX_PROGRESS_FILLED;
     std::cout << "\e[0;32m";
-    for (int i = filled; i < width; i++) std::cout << "░";
-    std::cout << "\e[0m │" << std::endl;
+    for (int i = filled; i < width; i++) std::cout << BOX_PROGRESS_EMPTY;
+    std::cout << "\e[0m " << BOX_VERTICAL << std::endl;
 }
 
 int printStats(MetricsStats stats, bool isScreen, bool mining)
@@ -786,6 +800,10 @@ bool enableVTMode()
     if (!SetConsoleMode(hOut, dwMode)) {
         return false;
     }
+
+    // Enable UTF-8 output for box-drawing characters (Windows 10 1903+)
+    SetConsoleOutputCP(CP_UTF8);
+
     return true;
 }
 #endif
@@ -928,17 +946,17 @@ static void promptForPercentage(int screenHeight)
             updateDonationPercentage(percentage);
             std::cout << "\e[" << inputRow << ";1H\e[K";  // Clear and reposition
             if (percentage == 0) {
-                std::cout << "✓ Donations disabled" << std::flush;
+                std::cout << SYMBOL_CHECK << " Donations disabled" << std::flush;
             } else {
-                std::cout << "✓ Donation set to " << percentage << "%" << std::flush;
+                std::cout << SYMBOL_CHECK << " Donation set to " << percentage << "%" << std::flush;
             }
         } else {
             std::cout << "\e[" << inputRow << ";1H\e[K";
-            std::cout << "✗ Invalid percentage (must be 0-100)" << std::flush;
+            std::cout << SYMBOL_CROSS << " Invalid percentage (must be 0-100)" << std::flush;
         }
     } catch (...) {
         std::cout << "\e[" << inputRow << ";1H\e[K";
-        std::cout << "✗ Invalid input (not a number)" << std::flush;
+        std::cout << SYMBOL_CROSS << " Invalid input (not a number)" << std::flush;
     }
 
     // Brief pause to show confirmation, then clear
@@ -1003,14 +1021,14 @@ static void promptForThreads(int screenHeight)
                 LogPrintf("User set mining threads to %d (will apply when mining starts)\n", threads);
             }
             std::cout << "\e[" << inputRow << ";1H\e[K";  // Clear and reposition
-            std::cout << "✓ Mining threads set to " << threads << std::flush;
+            std::cout << SYMBOL_CHECK << " Mining threads set to " << threads << std::flush;
         } else {
             std::cout << "\e[" << inputRow << ";1H\e[K";
-            std::cout << "✗ Invalid thread count (must be 1-" << maxThreads << ")" << std::flush;
+            std::cout << SYMBOL_CROSS << " Invalid thread count (must be 1-" << maxThreads << ")" << std::flush;
         }
     } catch (...) {
         std::cout << "\e[" << inputRow << ";1H\e[K";
-        std::cout << "✗ Invalid input (not a number)" << std::flush;
+        std::cout << SYMBOL_CROSS << " Invalid input (not a number)" << std::flush;
     }
 
     // Brief pause to show confirmation, then clear
