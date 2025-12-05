@@ -4890,9 +4890,9 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() < 2 || params.size() > 5)
+    if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
-            "z_sendmany \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee ) ( privacyPolicy )\n"
+            "z_sendmany \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
             "\nSend a transaction with multiple recipients. Amounts are decimal numbers with at"
             "\nmost 8 digits of precision. Change generated from one or more transparent"
             "\naddresses flows to a new transparent address, while change generated from a"
@@ -4919,32 +4919,11 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
             "3. minconf               (numeric, optional, default=" + strprintf("%u", DEFAULT_NOTE_CONFIRMATIONS) + ") Only use funds confirmed at least this many times.\n"
             "4. fee                   (numeric, optional, default=null) The fee amount in " + CURRENCY_UNIT + " to attach to this transaction. The default behavior\n"
             "                         is to use a fee calculated according to ZIP 317.\n"
-            "5. privacyPolicy         (string, optional, default=\"LegacyCompat\") Policy for what information leakage is acceptable.\n"
-            "                         One of the following strings:\n"
-            "                               - \"FullPrivacy\": Only allow fully-shielded transactions (involving a single shielded value pool).\n"
-            "                               - \"LegacyCompat\": If the transaction involves any Unified Addresses, this is equivalent to\n"
-            "                                 \"FullPrivacy\". Otherwise, this is equivalent to \"AllowFullyTransparent\".\n"
-            "                               - \"AllowRevealedAmounts\": Allow funds to cross between shielded value pools, revealing the amount\n"
-            "                                 that crosses pools.\n"
-            "                               - \"AllowRevealedRecipients\": Allow transparent recipients. This also implies revealing\n"
-            "                                 information described under \"AllowRevealedAmounts\".\n"
-            "                               - \"AllowRevealedSenders\": Allow transparent funds to be spent, revealing the sending\n"
-            "                                 addresses and amounts. This implies revealing information described under \"AllowRevealedAmounts\".\n"
-            "                               - \"AllowFullyTransparent\": Allow transaction to both spend transparent funds and have\n"
-            "                                 transparent recipients. This implies revealing information described under \"AllowRevealedSenders\"\n"
-            "                                 and \"AllowRevealedRecipients\".\n"
-            "                               - \"AllowLinkingAccountAddresses\": Allow selecting transparent coins from the full account,\n"
-            "                                 rather than just the funds sent to the transparent receiver in the provided Unified Address.\n"
-            "                                 This implies revealing information described under \"AllowRevealedSenders\".\n"
-            "                               - \"NoPrivacy\": Allow the transaction to reveal any information necessary to create it.\n"
-            "                                 This implies revealing information described under \"AllowFullyTransparent\" and\n"
-            "                                 \"AllowLinkingAccountAddresses\".\n"
             "\nResult:\n"
             "\"operationid\"          (string) An operationid to pass to z_getoperationstatus to get the result of the operation.\n"
             "\nExamples:\n"
             + HelpExampleCli("z_sendmany", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" '[{\"address\": \"ztfaW34Gj9FrnGUEf833ywDVL62NWXBM81u6EQnM6VR45eYnXhwztecW1SjxA7JrmAXKJhxhj3vDNEpVCQoSvVoSpmbhtjf\", \"amount\": 5.0}]'")
             + HelpExampleCli("z_sendmany", "\"ANY_TADDR\" '[{\"address\": \"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\", \"amount\": 2.0}]'")
-            + HelpExampleCli("z_sendmany", "\"ANY_TADDR\" '[{\"address\": \"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\", \"amount\": 2.0}]' 1 null 'AllowFullyTransparent'")
             + HelpExampleCli("z_sendmany", "\"ANY_TADDR\" '[{\"address\": \"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\", \"amount\": 2.0}]' 1 5000")
             + HelpExampleRpc("z_sendmany", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\", [{\"address\": \"ztfaW34Gj9FrnGUEf833ywDVL62NWXBM81u6EQnM6VR45eYnXhwztecW1SjxA7JrmAXKJhxhj3vDNEpVCQoSvVoSpmbhtjf\", \"amount\": 5.0}]")
         );
@@ -5040,12 +5019,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
         }
     }
 
-    auto strategy =
-        ResolveTransactionStrategy(
-                ReifyPrivacyPolicy(
-                        std::nullopt,
-                        params.size() > 4 ? std::optional(params[4].get_str()) : std::nullopt),
-                InterpretLegacyCompat(sender, recipientAddrs));
+    // Juno Cash: Privacy policy disabled - transparent addresses only used for mining
+    auto strategy = TransactionStrategy(PrivacyPolicy::NoPrivacy);
 
     auto ztxoSelector = [&]() {
         if (!sender.has_value()) {
@@ -5585,9 +5560,9 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() < 2 || params.size() > 7)
+    if (fHelp || params.size() < 2 || params.size() > 6)
         throw runtime_error(
-            "z_mergetoaddress [\"fromaddress\", ... ] \"toaddress\" ( fee ) ( transparent_limit ) ( shielded_limit ) ( memo ) ( privacyPolicy )\n"
+            "z_mergetoaddress [\"fromaddress\", ... ] \"toaddress\" ( fee ) ( transparent_limit ) ( shielded_limit ) ( memo )\n"
             "\nMerge multiple UTXOs and notes into a single UTXO or note.  Coinbase UTXOs are ignored; use `z_shieldcoinbase`"
             "\nto combine those into a single note."
             "\n\nThis is an asynchronous operation, and UTXOs selected for merging will be locked.  If there is an error, they"
@@ -5619,26 +5594,6 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
             "5. shielded_limit        (numeric, optional, default="
             + strprintf("%d Sprout or %d Sapling Notes", MERGE_TO_ADDRESS_DEFAULT_SPROUT_LIMIT, MERGE_TO_ADDRESS_DEFAULT_SAPLING_LIMIT) + ") Limit on the maximum number of notes to merge.  Set to 0 to merge as many as will fit in the transaction.\n"
             "6. \"memo\"                (string, optional) Encoded as hex. When toaddress is a zaddr, this will be stored in the memo field of the new note.\n"
-            "7. privacyPolicy         (string, optional, default=\"LegacyCompat\") Policy for what information leakage is acceptable.\n"
-            "                         One of the following strings:\n"
-            "                               - \"FullPrivacy\": Only allow fully-shielded transactions (involving a single shielded value pool).\n"
-            "                               - \"LegacyCompat\": If the transaction involves any Unified Addresses, this is equivalent to\n"
-            "                                 \"FullPrivacy\". Otherwise, this is equivalent to \"AllowFullyTransparent\".\n"
-            "                               - \"AllowRevealedAmounts\": Allow funds to cross between shielded value pools, revealing the amount\n"
-            "                                 that crosses pools.\n"
-            "                               - \"AllowRevealedRecipients\": Allow transparent recipients. This also implies revealing\n"
-            "                                 information described under \"AllowRevealedAmounts\".\n"
-            "                               - \"AllowRevealedSenders\": Allow transparent funds to be spent, revealing the sending\n"
-            "                                 addresses and amounts. This implies revealing information described under \"AllowRevealedAmounts\".\n"
-            "                               - \"AllowFullyTransparent\": Allow transaction to both spend transparent funds and have\n"
-            "                                 transparent recipients. This implies revealing information described under \"AllowRevealedSenders\"\n"
-            "                                 and \"AllowRevealedRecipients\".\n"
-            "                               - \"AllowLinkingAccountAddresses\": Allow selecting transparent coins from the full account,\n"
-            "                                 rather than just the funds sent to the transparent receiver in the provided Unified Address.\n"
-            "                                 This implies revealing information described under \"AllowRevealedSenders\".\n"
-            "                               - \"NoPrivacy\": Allow the transaction to reveal any information necessary to create it.\n"
-            "                                 This implies revealing information described under \"AllowFullyTransparent\" and\n"
-            "                                 \"AllowLinkingAccountAddresses\".\n"
             "\nResult:\n"
             "{\n"
             "  \"remainingUTXOs\": xxx               (numeric) Number of UTXOs still available for merging.\n"
@@ -5973,14 +5928,8 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
         contextInfo.pushKV("fee", ValueFromAmount(nFee.value()));
     }
 
-    // The privacy policy is determined early so as to be able to use it
-    // for selector construction.
-    auto strategy =
-        ResolveTransactionStrategy(
-                ReifyPrivacyPolicy(
-                        std::nullopt,
-                        params.size() > 6 ? std::optional(params[6].get_str()) : std::nullopt),
-                InterpretLegacyCompat(std::nullopt, {recipient.first}));
+    // Juno Cash: Privacy policy disabled - transparent addresses only used for mining
+    auto strategy = TransactionStrategy(PrivacyPolicy::NoPrivacy);
 
     WalletTxBuilder builder(Params(), minRelayTxFee);
 
