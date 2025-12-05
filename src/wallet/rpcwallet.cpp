@@ -218,6 +218,40 @@ UniValue getnewaddress(const UniValue& params, bool fHelp)
     return keyIO.EncodeDestination(keyID);
 }
 
+UniValue t_getminingaddress(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+            "t_getminingaddress\n"
+            "\nReturns a new transparent address for mining.\n"
+            "\nIn Juno Cash, coinbases are mined to transparent addresses and then\n"
+            "shielded to Orchard using z_shieldcoinbase.\n"
+            "\nResult:\n"
+            "\"address\"    (string) A transparent address (t1...) for use with mineraddress config\n"
+            "\nExamples:\n"
+            + HelpExampleCli("t_getminingaddress", "")
+            + HelpExampleRpc("t_getminingaddress", "")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    const CChainParams& chainparams = Params();
+    EnsureWalletIsBackedUp(chainparams);
+    EnsureWalletIsUnlocked();
+
+    // Generate a new key that is added to wallet
+    CPubKey newKey = pwalletMain->GenerateNewKey(true);
+    CKeyID keyID = newKey.GetID();
+
+    pwalletMain->SetAddressBook(keyID, "", "mining");
+
+    KeyIO keyIO(chainparams);
+    return keyIO.EncodeDestination(keyID);
+}
+
 UniValue z_converttex(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 1)
@@ -6137,6 +6171,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_converttex",             &z_converttex,             true  },
     { "wallet",             "getbalance",               &getbalance,               false },
     { "wallet",             "getnewaddress",            &getnewaddress,            true  },
+    { "wallet",             "t_getminingaddress",       &t_getminingaddress,       true  },
     { "wallet",             "getrawchangeaddress",      &getrawchangeaddress,      true  },
     { "wallet",             "getreceivedbyaddress",     &getreceivedbyaddress,     false },
     { "wallet",             "gettransaction",           &gettransaction,           false },

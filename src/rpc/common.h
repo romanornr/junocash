@@ -132,6 +132,7 @@ static const CRPCConvertTable rpcCvtTable =
     // rpcwallet
     { "z_converttex",                {{s}, {}} },
     { "getnewaddress",               {{}, {s}} },
+    { "t_getminingaddress",          {{}, {}} },
     { "getrawchangeaddress",         {{}, {}} },
     { "sendtoaddress",               {{s, o}, {s, s, o}} },
     { "listaddresses",               {{}, {}} },
