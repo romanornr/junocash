@@ -530,8 +530,8 @@ static void drawProgressBar(int percent, int width = 74) {
     std::cout << "\e[0m " << BOX_VERTICAL << std::endl;
 }
 
-// Update historical difficulty high/low and draw difficulty meter bar
-static void drawDifficultyMeter(double currentDifficulty, int width = 74) {
+// Draw Network Difficulty row with inline meter bar showing position between historical min/max
+static void drawDifficultyRow(double currentDifficulty, int rowWidth = 78) {
     // Initialize or update historical values
     if (!difficultyHistoryInitialized.load()) {
         difficultyHistoricalHigh = currentDifficulty;
@@ -562,28 +562,41 @@ static void drawDifficultyMeter(double currentDifficulty, int width = 74) {
         if (percent > 100) percent = 100;
     }
 
-    // Draw the meter bar with color coding based on difficulty level
-    // Green (low): 0-33%, Orange (average): 34-66%, Red (high): 67-100%
-    int filled = (percent * width) / 100;
-    const char* filledColor;
-    const char* emptyColor;
+    // Format the difficulty value
+    std::string valueStr = strprintf("%.6f", currentDifficulty);
+    std::string label = "Network Difficulty";
 
+    // Calculate available space for meter bar: total width - label - value - padding
+    int labelLen = visibleLength(label);
+    int valueLen = visibleLength(valueStr);
+    int meterWidth = rowWidth - labelLen - valueLen - 8;  // -8 for spacing and box chars
+    if (meterWidth < 10) meterWidth = 10;  // Minimum meter width
+
+    // Calculate marker position within the bar
+    int markerPos = (percent * meterWidth) / 100;
+    if (markerPos >= meterWidth) markerPos = meterWidth - 1;
+
+    // Determine color based on difficulty level
+    // Green (low): 0-33%, Orange (average): 34-66%, Red (high): 67-100%
+    const char* barColor;
     if (percent <= 33) {
-        filledColor = "\e[1;32m";  // Bright green for low difficulty
-        emptyColor = "\e[0;32m";   // Dim green
+        barColor = "\e[0;32m";  // Green for low difficulty
     } else if (percent <= 66) {
-        filledColor = "\e[1;33m";  // Bright orange for average difficulty
-        emptyColor = "\e[0;33m";   // Dim orange
+        barColor = "\e[0;33m";  // Orange for average difficulty
     } else {
-        filledColor = "\e[1;31m";  // Bright red for high difficulty
-        emptyColor = "\e[0;31m";   // Dim red
+        barColor = "\e[0;31m";  // Red for high difficulty
     }
 
-    std::cout << BOX_VERTICAL << " " << filledColor;
-    for (int i = 0; i < filled; i++) std::cout << BOX_PROGRESS_FILLED;
-    std::cout << emptyColor;
-    for (int i = filled; i < width; i++) std::cout << BOX_PROGRESS_EMPTY;
-    std::cout << "\e[0m " << BOX_VERTICAL << std::endl;
+    // Draw the row: | Label  [bar with | marker]  value |
+    std::cout << BOX_VERTICAL << " \e[1;36m" << label << "\e[0m  " << barColor;
+    for (int i = 0; i < meterWidth; i++) {
+        if (i == markerPos) {
+            std::cout << "\e[1;37m|\e[0m" << barColor;  // White vertical marker
+        } else {
+            std::cout << BOX_PROGRESS_EMPTY;
+        }
+    }
+    std::cout << "\e[0m  \e[1;33m" << valueStr << "\e[0m " << BOX_VERTICAL << std::endl;
 }
 
 int printStats(MetricsStats stats, bool isScreen, bool mining)
@@ -637,16 +650,14 @@ int printStats(MetricsStats stats, bool isScreen, bool mining)
         lines++;
     }
 
-    // Network Difficulty
+    // Network Difficulty with inline meter bar
     double difficulty = GetNetworkDifficulty(chainActive.Tip());
-    drawRow("Network Difficulty", strprintf("%.6f", difficulty));
-    lines++;
-
-    // Add difficulty meter bar showing historical context
     if (isScreen) {
-        drawDifficultyMeter(difficulty);
-        lines++;
+        drawDifficultyRow(difficulty);
+    } else {
+        drawRow("Network Difficulty", strprintf("%.6f", difficulty));
     }
+    lines++;
 
     // Network info
     auto secondsLeft = SecondsLeftToNextEpoch(params, stats.height);
