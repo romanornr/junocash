@@ -88,6 +88,7 @@ void TriggerRefresh();
 
 void ConnectMetricsScreen();
 void ThreadShowMetricsScreen();
+void ThreadBenchmarkMining();
 
 const std::string METRICS_ART = "";
 
