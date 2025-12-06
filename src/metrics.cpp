@@ -796,8 +796,13 @@ int printMiningStatus(bool mining)
     lines++;
 
     if (mining) {
-        // Get current thread count
-        int nThreads = GetArg("-genproclimit", 1);
+        // Get current thread count (use benchmark current threads if in benchmark mode)
+        int nThreads;
+        if (benchmarkMode.load()) {
+            nThreads = benchmarkCurrentThreads.load();
+        } else {
+            nThreads = GetArg("-genproclimit", 1);
+        }
 
         std::string controls = strprintf("\e[1;37m[M]\e[0m Mining: \e[1;32mON\e[0m  \e[1;37m[T]\e[0m Threads: %d", nThreads);
 
