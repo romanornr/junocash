@@ -579,19 +579,23 @@ static void drawDifficultyRow(double currentDifficulty, int rowWidth = 78) {
     // Determine color based on difficulty level
     // Green (low): 0-33%, Orange (average): 34-66%, Red (high): 67-100%
     const char* barColor;
+    const char* markerColor;
     if (percent <= 33) {
-        barColor = "\e[0;32m";  // Green for low difficulty
+        barColor = "\e[0;32m";     // Green for low difficulty
+        markerColor = "\e[1;35m";  // Bright magenta marker (high contrast with green)
     } else if (percent <= 66) {
-        barColor = "\e[0;33m";  // Orange for average difficulty
+        barColor = "\e[0;33m";     // Orange for average difficulty
+        markerColor = "\e[1;36m";  // Bright cyan marker (high contrast with orange)
     } else {
-        barColor = "\e[0;31m";  // Red for high difficulty
+        barColor = "\e[0;31m";     // Red for high difficulty
+        markerColor = "\e[1;36m";  // Bright cyan marker (high contrast with red)
     }
 
-    // Draw the row: | Label  [bar with | marker]  value |
+    // Draw the row: | Label  [bar with colored marker]  value |
     std::cout << BOX_VERTICAL << " \e[1;36m" << label << "\e[0m  " << barColor;
     for (int i = 0; i < meterWidth; i++) {
         if (i == markerPos) {
-            std::cout << "\e[1;37m|\e[0m" << barColor;  // White vertical marker
+            std::cout << markerColor << BOX_PROGRESS_FILLED << barColor;  // High-contrast marker
         } else {
             std::cout << BOX_PROGRESS_EMPTY;
         }
