@@ -651,7 +651,8 @@ static void drawDifficultyRow(double currentDifficulty, int rowWidth = 78) {
     // Calculate available space for meter bar: total width - label - value - padding
     int labelLen = visibleLength(label);
     int valueLen = visibleLength(valueStr);
-    int meterWidth = rowWidth - labelLen - valueLen - 8;  // -8 for spacing and box chars
+    // -2 for box borders, -2 for spaces after label, -2 for spaces before value = -6 total
+    int meterWidth = rowWidth - labelLen - valueLen - 6;
     if (meterWidth < 10) meterWidth = 10;  // Minimum meter width
 
     // Calculate marker position within the bar
