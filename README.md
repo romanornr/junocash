@@ -49,13 +49,13 @@ Cross compile builds can be performed on Debian using the following commands:
 
 ```
 # Linux build
-./zcutil/build-release --linux -j $(nproc)
+./zcutil/build-release.sh --linux -j $(nproc)
 
 # Windows build
-./zcutil/build-release --windows -j $(nproc)
+./zcutil/build-release.sh --windows -j $(nproc)
 
 # MacOS (Apple Silicon)
-./zcutil/build-release --macos-arm -j $(nproc)
+./zcutil/build-release.sh --macos-arm -j $(nproc)
 
 
 ### Issues/Bugs/Features
