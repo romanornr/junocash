@@ -6611,9 +6611,13 @@ bool CWallet::InitLoadWallet(const CChainParams& params, bool clearWitnessCaches
     {
         // We can't set the new HD seed until the wallet is decrypted.
         // https://github.com/zcash/zcash/issues/3607
-        if (!walletInstance->IsCrypted()) {
+        // Skip seed generation if -skipwalletinit is set (for wallet recovery)
+        bool skipWalletInit = GetBoolArg("-skipwalletinit", false);
+        if (!walletInstance->IsCrypted() && !skipWalletInit) {
             // generate a new HD seed
             walletInstance->GenerateNewSeed();
+        } else if (skipWalletInit) {
+            LogPrintf("Skipping seed generation due to -skipwalletinit flag (for wallet recovery)\n");
         }
     }
 
@@ -6623,7 +6627,8 @@ bool CWallet::InitLoadWallet(const CChainParams& params, bool clearWitnessCaches
     if (fFirstRun)
     {
         // Create new keyUser and set as default key
-        if (!walletInstance->IsCrypted()) {
+        // Skip if -skipwalletinit is set (wallet recovery mode)
+        if (!walletInstance->IsCrypted() && !GetBoolArg("-skipwalletinit", false)) {
             LOCK(walletInstance->cs_wallet);
 
             CPubKey newDefaultKey = walletInstance->GenerateNewKey(true);

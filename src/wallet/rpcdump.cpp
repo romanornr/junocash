@@ -742,6 +742,162 @@ UniValue z_getseedphrase(const UniValue& params, bool fHelp)
     return tmpPath.string();
 }
 
+UniValue z_recoverwallet(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() < 1 || params.size() > 3)
+        throw runtime_error(
+            "z_recoverwallet \"mnemonic\" ( birthday_height language )\n"
+            "\nRecovers wallet from a 24-word mnemonic seed phrase.\n"
+            "\nThis command will fail if the wallet already has a seed. To recover\n"
+            "a wallet from a seed phrase:\n"
+            "  1. Stop the daemon\n"
+            "  2. Remove or rename wallet.dat\n"
+            "  3. Start daemon with -skipwalletinit flag\n"
+            "  4. Call this command with your seed phrase\n"
+            "\nArguments:\n"
+            "1. mnemonic        (string, required) 24-word recovery phrase\n"
+            "2. birthday_height (numeric, optional, default=0) Block height to start rescan from\n"
+            "3. language        (string, optional, default=\"english\") Phrase language\n"
+            "                   Options: english, simplified_chinese, traditional_chinese,\n"
+            "                            czech, french, italian, japanese, korean, portuguese, spanish\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"fingerprint\": \"hex\",           (string) Seed fingerprint\n"
+            "  \"transparent_address\": \"t1...\", (string) Default transparent address\n"
+            "  \"unified_address\": \"u1...\"      (string) Default unified address with Orchard receiver\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_recoverwallet", "\"abandon abandon abandon ... art\"")
+            + HelpExampleCli("z_recoverwallet", "\"abandon abandon abandon ... art\" 100000")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    // Check wallet doesn't already have a seed
+    if (pwalletMain->HaveMnemonicSeed()) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Wallet already has a mnemonic seed. To recover from a different seed:\n"
+            "1. Stop the daemon\n"
+            "2. Remove or rename wallet.dat\n"
+            "3. Start daemon with -skipwalletinit flag\n"
+            "4. Call z_recoverwallet with your seed phrase");
+    }
+
+    // Parse mnemonic phrase
+    SecureString mnemonic(params[0].get_str());
+    boost::trim(mnemonic);
+
+    // Parse optional birthday height
+    int birthdayHeight = 0;
+    if (params.size() > 1 && !params[1].isNull()) {
+        birthdayHeight = params[1].get_int();
+        if (birthdayHeight < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "birthday_height must be non-negative");
+        }
+        if (birthdayHeight > chainActive.Height()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "birthday_height cannot be greater than current chain height");
+        }
+    }
+
+    // Parse optional language
+    Language language = English;
+    if (params.size() > 2 && !params[2].isNull()) {
+        std::string langStr = params[2].get_str();
+        boost::to_lower(langStr);
+
+        if (langStr == "english") language = English;
+        else if (langStr == "simplified_chinese") language = SimplifiedChinese;
+        else if (langStr == "traditional_chinese") language = TraditionalChinese;
+        else if (langStr == "czech") language = Czech;
+        else if (langStr == "french") language = French;
+        else if (langStr == "italian") language = Italian;
+        else if (langStr == "japanese") language = Japanese;
+        else if (langStr == "korean") language = Korean;
+        else if (langStr == "portuguese") language = Portuguese;
+        else if (langStr == "spanish") language = Spanish;
+        else {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Invalid language. Options: english, simplified_chinese, traditional_chinese, "
+                "czech, french, italian, japanese, korean, portuguese, spanish");
+        }
+    }
+
+    // Validate and create seed from phrase
+    auto seedOpt = MnemonicSeed::ForPhrase(language, mnemonic);
+    if (!seedOpt.has_value()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "Invalid mnemonic phrase. Check that:\n"
+            "- The phrase has exactly 24 words\n"
+            "- All words are valid BIP-39 words for the specified language\n"
+            "- The checksum is correct");
+    }
+    auto seed = seedOpt.value();
+
+    // Initialize wallet with seed (following GenerateNewSeed pattern)
+    int64_t nCreationTime = GetTime();
+
+    if (!pwalletMain->SetMnemonicSeed(seed)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to set mnemonic seed in wallet");
+    }
+
+    // Store HD chain metadata
+    CHDChain newHdChain(seed.Fingerprint(), nCreationTime);
+    pwalletMain->SetMnemonicHDChain(newHdChain, false);
+
+    // Generate transparent keypool
+    pwalletMain->TopUpKeyPool();
+
+    // Generate default transparent address
+    CPubKey newDefaultKey = pwalletMain->GenerateNewKey(true);
+    pwalletMain->SetDefaultKey(newDefaultKey);
+    pwalletMain->SetAddressBook(newDefaultKey.GetID(), "", "receive");
+
+    // Generate account 0 unified spending key and address
+    auto ufvkPair = pwalletMain->GenerateNewUnifiedSpendingKey();
+    libzcash::AccountId account = ufvkPair.second;
+
+    // Generate default unified address with Orchard receiver
+    auto receiverTypes = CWallet::DefaultReceiverTypes(chainActive.Height());
+    auto addrResult = pwalletMain->GenerateUnifiedAddress(account, receiverTypes, std::nullopt);
+
+    std::string unifiedAddress;
+    examine(addrResult, match {
+        [&](std::pair<libzcash::UnifiedAddress, libzcash::diversifier_index_t> addr) {
+            KeyIO keyIO(Params());
+            unifiedAddress = keyIO.EncodePaymentAddress(addr.first);
+        },
+        [&](WalletUAGenerationError error) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Failed to generate unified address");
+        },
+        [&](libzcash::UnifiedAddressGenerationError error) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Failed to generate unified address");
+        }
+    });
+
+    // Rescan blockchain from birthday height
+    CBlockIndex* pindex = chainActive[birthdayHeight];
+    if (pindex) {
+        pwalletMain->ScanForWalletTransactions(pindex, true, true);
+    }
+    pwalletMain->MarkDirty();
+
+    // Build result
+    KeyIO keyIO(Params());
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("fingerprint", seed.Fingerprint().GetHex());
+    result.pushKV("transparent_address", keyIO.EncodeDestination(newDefaultKey.GetID()));
+    result.pushKV("unified_address", unifiedAddress);
+
+    LogPrintf("Wallet recovered from seed phrase. Fingerprint: %s\n", seed.Fingerprint().GetHex());
+
+    return result;
+}
+
 
 UniValue z_importkey(const UniValue& params, bool fHelp)
 {
