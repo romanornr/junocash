@@ -1884,8 +1884,21 @@ void ThreadBenchmarkMining()
         benchmarkLog << "========================================\n";
         benchmarkLog << std::flush;
 
+        // Get ending block height
+        int endHeight = 0;
+        {
+            LOCK(cs_main);
+            if (chainActive.Tip()) {
+                endHeight = chainActive.Tip()->nHeight;
+            }
+        }
+
         LogPrintf("Benchmark complete! Best: %s mode, %d threads @ %.2f H/s\n", bestMode, bestThreads, bestHashrate);
+        LogPrintf("Benchmark ran from block height %d to %d\n", benchmarkStartHeight, endHeight);
         LogPrintf("Results saved to %s\n", benchmarkLogPath.string());
+
+        benchmarkLog << "Starting block height: " << benchmarkStartHeight << "\n";
+        benchmarkLog << "Ending block height: " << endHeight << "\n";
 
         // Apply optimal configuration if user requested
         if (benchmarkAutoApply.load() && bestThreads > 0) {
@@ -1914,6 +1927,9 @@ void ThreadBenchmarkMining()
                 RandomX_Shutdown();
                 RandomX_Init(bestMode == "Fast" || bestMode == "Fast+Hugepages",
                             bestMode == "Fast+Hugepages");
+
+                // Exit benchmark mode BEFORE starting normal mining
+                benchmarkMode = false;
 
                 // Start mining with optimal configuration
                 LogPrintf("Starting mining with optimal configuration\n");
@@ -1945,6 +1961,10 @@ void ThreadBenchmarkMining()
                 RandomX_Shutdown();
                 RandomX_Init(bestMode == "Fast" || bestMode == "Fast+Hugepages",
                             bestMode == "Fast+Hugepages");
+
+                // Exit benchmark mode BEFORE starting normal mining
+                benchmarkMode = false;
+
                 GenerateBitcoins(true, bestThreads, Params());
             }
         }
@@ -1986,7 +2006,20 @@ void ThreadBenchmarkMining()
                 }
             }
 
+            // Get ending block height
+            int endHeight = 0;
+            {
+                LOCK(cs_main);
+                if (chainActive.Tip()) {
+                    endHeight = chainActive.Tip()->nHeight;
+                }
+            }
+
             LogPrintf("Benchmark interrupted. Partial results: Best %s mode, %d threads @ %.2f H/s\n", bestMode, bestThreads, bestHashrate);
+            LogPrintf("Benchmark ran from block height %d to %d (interrupted)\n", benchmarkStartHeight, endHeight);
+
+            benchmarkLog << "Starting block height: " << benchmarkStartHeight << "\n";
+            benchmarkLog << "Ending block height: " << endHeight << " (interrupted)\n";
 
             // Apply optimal configuration if user requested (even with partial results)
             if (benchmarkAutoApply.load() && bestThreads > 0) {
@@ -2012,6 +2045,10 @@ void ThreadBenchmarkMining()
                     RandomX_Shutdown();
                     RandomX_Init(bestMode == "Fast" || bestMode == "Fast+Hugepages",
                                 bestMode == "Fast+Hugepages");
+
+                    // Exit benchmark mode BEFORE starting normal mining
+                    benchmarkMode = false;
+
                     LogPrintf("Starting mining with %s mode, %d threads (from partial results)\n", bestMode, bestThreads);
                     GenerateBitcoins(true, bestThreads, Params());
 
@@ -2037,6 +2074,10 @@ void ThreadBenchmarkMining()
                     RandomX_Shutdown();
                     RandomX_Init(bestMode == "Fast" || bestMode == "Fast+Hugepages",
                                 bestMode == "Fast+Hugepages");
+
+                    // Exit benchmark mode BEFORE starting normal mining
+                    benchmarkMode = false;
+
                     GenerateBitcoins(true, bestThreads, Params());
                 }
             }
