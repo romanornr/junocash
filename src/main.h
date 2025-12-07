@@ -638,6 +638,14 @@ public:
 /** Find the last common block between the parameter chain and a locator. */
 CBlockIndex* FindForkInGlobalIndex(const CChain& chain, const CBlockLocator& locator);
 
+/** Mark a block as precious and reorganize.
+ *
+ * Treats a block as if it were received before others with the same work.
+ * A later preciousblock call can override the effect of an earlier one.
+ * The effects of preciousblock are not retained across restarts.
+ */
+bool PreciousBlock(CValidationState& state, const CChainParams& chainparams, CBlockIndex *pindex);
+
 /** Mark a block as invalid. */
 bool InvalidateBlock(CValidationState& state, const CChainParams& chainparams, CBlockIndex *pindex);
 
