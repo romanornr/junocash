@@ -45,6 +45,13 @@
 #include <termios.h>
 #endif
 #include <unistd.h>
+#if defined(_M_X64) || defined(__x86_64__)
+    #if defined(_MSC_VER)
+        #include <intrin.h>
+    #else
+        #include <cpuid.h>
+    #endif
+#endif
 
 // Box-drawing characters (UTF-8)
 static const char* BOX_HORIZONTAL = "\xe2\x94\x80";      // ─ (U+2500)
@@ -166,6 +173,71 @@ static std::atomic<bool> difficultyHistoryInitialized(false);
 
 // External function declarations
 extern int64_t GetNetworkHashPS(int lookup, int height);
+
+// Get CPU model name using CPUID
+static std::string GetCPUModel() {
+#if defined(_M_X64) || defined(__x86_64__)
+    #if defined(_MSC_VER)
+        int CPUInfo[4] = {-1};
+        char CPUBrandString[0x40];
+        __cpuid(CPUInfo, 0x80000000);
+        unsigned int nExIds = CPUInfo[0];
+
+        memset(CPUBrandString, 0, sizeof(CPUBrandString));
+
+        if (nExIds >= 0x80000004) {
+            __cpuid((int*)(CPUBrandString), 0x80000002);
+            __cpuid((int*)(CPUBrandString + 16), 0x80000003);
+            __cpuid((int*)(CPUBrandString + 32), 0x80000004);
+        }
+
+        return std::string(CPUBrandString);
+    #else
+        char brand[0x40];
+        unsigned int brand_data[12];
+
+        // Get extended CPUID info
+        if (__get_cpuid_max(0x80000000, nullptr) >= 0x80000004) {
+            __cpuid(0x80000002, brand_data[0], brand_data[1], brand_data[2], brand_data[3]);
+            __cpuid(0x80000003, brand_data[4], brand_data[5], brand_data[6], brand_data[7]);
+            __cpuid(0x80000004, brand_data[8], brand_data[9], brand_data[10], brand_data[11]);
+
+            memcpy(brand, brand_data, sizeof(brand_data));
+            brand[sizeof(brand_data)] = '\0';
+
+            // Trim leading spaces
+            std::string result(brand);
+            size_t start = result.find_first_not_of(" ");
+            if (start != std::string::npos) {
+                return result.substr(start);
+            }
+            return result;
+        }
+    #endif
+#elif defined(__aarch64__) || defined(__arm__)
+    // On ARM, try to read from /proc/cpuinfo
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    if (cpuinfo.is_open()) {
+        std::string line;
+        while (std::getline(cpuinfo, line)) {
+            if (line.find("model name") != std::string::npos ||
+                line.find("Processor") != std::string::npos) {
+                size_t pos = line.find(":");
+                if (pos != std::string::npos) {
+                    std::string model = line.substr(pos + 1);
+                    // Trim leading spaces
+                    size_t start = model.find_first_not_of(" \t");
+                    if (start != std::string::npos) {
+                        return model.substr(start);
+                    }
+                    return model;
+                }
+            }
+        }
+    }
+#endif
+    return "Unknown CPU";
+}
 
 // Load difficulty history from file, or calculate from blockchain if file doesn't exist
 static void loadDifficultyHistory()
@@ -938,6 +1010,11 @@ int printMiningStatus(bool mining)
             } else {
                 drawRow("Status", strprintf("\e[1;32m● ACTIVE\e[0m - %d threads", nThreads));
             }
+            lines++;
+
+            // Show CPU model
+            static std::string cpuModel = GetCPUModel();
+            drawRow("CPU", cpuModel);
             lines++;
 
             // Show block reward
