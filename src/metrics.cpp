@@ -35,10 +35,12 @@
 #include <cstdio>
 #include <vector>
 #include <set>
+#include <map>
 #ifdef WIN32
 #include <io.h>
 #include <wincon.h>
 #include <conio.h>
+#include <windows.h>
 #else
 #include <sys/ioctl.h>
 #include <poll.h>
@@ -51,6 +53,9 @@
     #else
         #include <cpuid.h>
     #endif
+#endif
+#ifdef __APPLE__
+#include <sys/sysctl.h>
 #endif
 
 // Box-drawing characters (UTF-8)
@@ -174,6 +179,84 @@ static std::atomic<bool> difficultyHistoryInitialized(false);
 // External function declarations
 extern int64_t GetNetworkHashPS(int lookup, int height);
 
+// Get motherboard model from DMI/SMBIOS
+static std::string GetMotherboardModel() {
+#if defined(__linux__)
+    // Try reading from DMI/SMBIOS
+    std::ifstream vendor("/sys/class/dmi/id/board_vendor");
+    std::ifstream name("/sys/class/dmi/id/board_name");
+
+    std::string vendorStr, nameStr;
+    if (vendor.is_open() && name.is_open()) {
+        std::getline(vendor, vendorStr);
+        std::getline(name, nameStr);
+
+        // Trim whitespace
+        vendorStr.erase(vendorStr.find_last_not_of(" \n\r\t") + 1);
+        nameStr.erase(nameStr.find_last_not_of(" \n\r\t") + 1);
+
+        if (!vendorStr.empty() && !nameStr.empty()) {
+            return vendorStr + " " + nameStr;
+        }
+    }
+#elif defined(__APPLE__)
+    // On macOS, use sysctl to get model info
+    char model[256];
+    size_t len = sizeof(model);
+    if (sysctlbyname("hw.model", model, &len, nullptr, 0) == 0) {
+        return std::string(model);
+    }
+#elif defined(_WIN32)
+    // On Windows, read from registry
+    // This would require Windows API calls - for now return placeholder
+    // Could use WMI queries: SELECT * FROM Win32_BaseBoard
+    return "Windows Motherboard";
+#endif
+    return "Unknown";
+}
+
+// Get memory information (DIMMs, speed, channels)
+static std::string GetMemoryInfo() {
+#if defined(__linux__)
+    // Read total memory from /proc/meminfo
+    std::ifstream meminfo("/proc/meminfo");
+    uint64_t totalMemKB = 0;
+    if (meminfo.is_open()) {
+        std::string line;
+        while (std::getline(meminfo, line)) {
+            if (line.find("MemTotal:") == 0) {
+                std::istringstream iss(line.substr(9));
+                iss >> totalMemKB;
+                break;
+            }
+        }
+    }
+
+    if (totalMemKB > 0) {
+        uint64_t totalGB = (totalMemKB + 524288) / 1048576;  // Round to nearest GB
+        return strprintf("%d GB", totalGB);
+    }
+#elif defined(__APPLE__)
+    // On macOS, use sysctl to get memory size
+    int64_t memsize = 0;
+    size_t len = sizeof(memsize);
+    if (sysctlbyname("hw.memsize", &memsize, &len, nullptr, 0) == 0) {
+        int totalGB = memsize / (1024 * 1024 * 1024);
+        return strprintf("%d GB", totalGB);
+    }
+#elif defined(_WIN32)
+    // On Windows, use GlobalMemoryStatusEx
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+    if (GlobalMemoryStatusEx(&memInfo)) {
+        DWORDLONG totalMem = memInfo.ullTotalPhys;
+        int totalGB = totalMem / (1024 * 1024 * 1024);
+        return strprintf("%d GB", totalGB);
+    }
+#endif
+    return "Unknown";
+}
+
 // Get CPU model name using CPUID
 static std::string GetCPUModel() {
 #if defined(_M_X64) || defined(__x86_64__)
@@ -234,6 +317,20 @@ static std::string GetCPUModel() {
                 }
             }
         }
+    }
+#elif defined(__APPLE__)
+    // On macOS, use sysctl to get CPU brand string
+    char brand[256];
+    size_t len = sizeof(brand);
+    if (sysctlbyname("machdep.cpu.brand_string", brand, &len, nullptr, 0) == 0) {
+        std::string result(brand);
+        // Trim leading/trailing spaces
+        size_t start = result.find_first_not_of(" \t");
+        size_t end = result.find_last_not_of(" \t\n\r");
+        if (start != std::string::npos && end != std::string::npos) {
+            return result.substr(start, end - start + 1);
+        }
+        return result;
     }
 #endif
     return "Unknown CPU";
@@ -1014,8 +1111,24 @@ int printMiningStatus(bool mining)
 
             // Show CPU model
             static std::string cpuModel = GetCPUModel();
-            drawRow("CPU", cpuModel);
-            lines++;
+            if (cpuModel != "Unknown CPU") {
+                drawRow("CPU", cpuModel);
+                lines++;
+            }
+
+            // Show memory info
+            static std::string memoryInfo = GetMemoryInfo();
+            if (memoryInfo != "Unknown") {
+                drawRow("Memory", memoryInfo);
+                lines++;
+            }
+
+            // Show motherboard model
+            static std::string motherboard = GetMotherboardModel();
+            if (motherboard != "Unknown") {
+                drawRow("Motherboard", motherboard);
+                lines++;
+            }
 
             // Show block reward
             int nHeight = chainActive.Height() + 1; // Next block to be mined
@@ -1983,97 +2096,6 @@ static std::string GetCPUVendor()
     }
 #endif
     return "Unknown";
-}
-
-static std::string GetCPUModel()
-{
-#ifndef WIN32
-    std::ifstream cpuinfo("/proc/cpuinfo");
-    std::string line;
-
-    while (std::getline(cpuinfo, line)) {
-        if (line.find("model name") != std::string::npos) {
-            size_t pos = line.find(":");
-            if (pos != std::string::npos) {
-                std::string model = line.substr(pos + 2);
-                // Clean up and extract key parts for filename
-                // Remove extra spaces and special characters
-                model.erase(std::remove_if(model.begin(), model.end(),
-                    [](char c) { return !std::isalnum(c) && c != '-'; }), model.end());
-                // Limit length
-                if (model.length() > 30) {
-                    model = model.substr(0, 30);
-                }
-                return model;
-            }
-        }
-    }
-#endif
-    return "Unknown";
-}
-
-static std::string GetMemoryInfo()
-{
-#ifndef WIN32
-    std::ifstream meminfo("/proc/meminfo");
-    std::string line;
-    std::stringstream info;
-
-    long totalMem = 0;
-    long freeMem = 0;
-    long availableMem = 0;
-    int hugepages_2m_total = 0;
-    int hugepages_2m_free = 0;
-    int hugepages_1g_total = 0;
-    int hugepages_1g_free = 0;
-
-    // Read system memory
-    while (std::getline(meminfo, line)) {
-        if (line.find("MemTotal:") != std::string::npos) {
-            sscanf(line.c_str(), "MemTotal: %ld kB", &totalMem);
-        } else if (line.find("MemFree:") != std::string::npos) {
-            sscanf(line.c_str(), "MemFree: %ld kB", &freeMem);
-        } else if (line.find("MemAvailable:") != std::string::npos) {
-            sscanf(line.c_str(), "MemAvailable: %ld kB", &availableMem);
-        }
-    }
-
-    info << "Total: " << (totalMem / 1024) << " MB, ";
-    info << "Available: " << (availableMem / 1024) << " MB";
-
-    // Check hugepages
-    std::ifstream hp_2m_total("/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages");
-    if (hp_2m_total.is_open()) {
-        hp_2m_total >> hugepages_2m_total;
-    }
-
-    std::ifstream hp_2m_free("/sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages");
-    if (hp_2m_free.is_open()) {
-        hp_2m_free >> hugepages_2m_free;
-    }
-
-    std::ifstream hp_1g_total("/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages");
-    if (hp_1g_total.is_open()) {
-        hp_1g_total >> hugepages_1g_total;
-    }
-
-    std::ifstream hp_1g_free("/sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages");
-    if (hp_1g_free.is_open()) {
-        hp_1g_free >> hugepages_1g_free;
-    }
-
-    if (hugepages_1g_total > 0) {
-        info << "\n  1GB Hugepages: " << hugepages_1g_total << " total, " << hugepages_1g_free << " free (" << (hugepages_1g_total * 1024) << " MB)";
-    }
-
-    if (hugepages_2m_total > 0) {
-        info << "\n  2MB Hugepages: " << hugepages_2m_total << " total, " << hugepages_2m_free << " free (" << (hugepages_2m_total * 2) << " MB)";
-    }
-
-    return info.str();
-#else
-    return "Windows Memory";
-#endif
 }
 
 static int GetCPUCores()
