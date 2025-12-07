@@ -1339,21 +1339,34 @@ int printMiningStatus(bool mining)
                             // Format: DIMM_A1: 32 GB DDR4 Corsair CMK16GX4M2B3200C16 @ 3133 MHz
                             std::stringstream dimmSS;
                             dimmSS << dimm.id().data() << ": "
-                                   << (dimm.size() + 512*1024*1024) / (1024*1024*1024) << " GB "
-                                   << dimm.type();
+                                   << (dimm.size() + 512*1024*1024) / (1024*1024*1024) << " GB";
 
-                            // Add vendor if available
+                            // Add type if available and not "Undefined"
+                            std::string typeStr = dimm.type().data();
+                            if (!typeStr.empty() && typeStr != "Undefined" && typeStr != "Unknown") {
+                                dimmSS << " " << typeStr;
+                            }
+
+                            // Add vendor if available and not "Undefined"
                             if (dimm.vendor().isValid() && !dimm.vendor().isEmpty()) {
-                                dimmSS << " " << dimm.vendor().data();
+                                std::string vendorStr = dimm.vendor().data();
+                                if (vendorStr != "Undefined" && vendorStr != "Unknown") {
+                                    dimmSS << " " << vendorStr;
+                                }
                             }
 
-                            // Add product/model if available
+                            // Add product/model if available and not "Undefined"
                             if (dimm.product().isValid() && !dimm.product().isEmpty()) {
-                                dimmSS << " " << dimm.product().data();
+                                std::string productStr = dimm.product().data();
+                                if (productStr != "Undefined" && productStr != "Unknown") {
+                                    dimmSS << " " << productStr;
+                                }
                             }
 
-                            // Add speed at the end
-                            dimmSS << " @ " << dimm.speed() / 1000000 << " MHz";
+                            // Add speed at the end if available
+                            if (dimm.speed() > 0) {
+                                dimmSS << " @ " << dimm.speed() / 1000000 << " MHz";
+                            }
 
                             drawRow("", dimmSS.str());
                             lines++;
