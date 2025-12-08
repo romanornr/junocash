@@ -2105,7 +2105,7 @@ static bool writeOptimalThreadsToConfig(int threads, const std::string& mode = "
 }
 
 // Prompt user for which modes to benchmark
-static void promptBenchmarkModes(int screenHeight, bool& testLight, bool& testFast, bool& testHugepages)
+static bool promptBenchmarkModes(int screenHeight, bool& testLight, bool& testFast, bool& testHugepages)
 {
 #ifndef WIN32
     enableCanonicalMode();
@@ -2116,7 +2116,7 @@ static void promptBenchmarkModes(int screenHeight, bool& testLight, bool& testFa
 
     // Clear input area and show prompt
     std::cout << "\e[" << inputRow << ";1H\e[K";
-    std::cout << "Benchmark modes - [A]ll [L]ight [F]ast [H]ugepages [FH]ast+Hugepages (default: A): " << std::flush;
+    std::cout << "Benchmark modes - [A]ll [L]ight [F]ast [H]ugepages [FH]ast+Hugepages [C]ancel (default: A): " << std::flush;
 
     std::string input;
     std::getline(std::cin, input);
@@ -2128,6 +2128,16 @@ static void promptBenchmarkModes(int screenHeight, bool& testLight, bool& testFa
     testLight = false;
     testFast = false;
     testHugepages = false;
+
+    if (input == "C") {
+        std::cout << "\e[" << inputRow << ";1H\e[K";
+        std::cout << SYMBOL_CROSS << " Benchmark cancelled" << std::flush;
+        MilliSleep(1000);
+#ifndef WIN32
+        enableRawMode();
+#endif
+        return false;
+    }
 
     if (input.empty() || input == "A") {
         testLight = true;
@@ -2153,15 +2163,18 @@ static void promptBenchmarkModes(int screenHeight, bool& testLight, bool& testFa
         std::cout << "\e[" << inputRow << ";1H\e[K";
         std::cout << SYMBOL_CHECK << " Will test Fast and Fast+Hugepages modes" << std::flush;
     } else {
-        // Invalid input, default to all
-        testLight = true;
-        testFast = true;
-        testHugepages = true;
+        // Invalid input, cancel
         std::cout << "\e[" << inputRow << ";1H\e[K";
-        std::cout << SYMBOL_CHECK << " Invalid choice, will test all modes" << std::flush;
+        std::cout << SYMBOL_CROSS << " Invalid choice, benchmark cancelled" << std::flush;
+        MilliSleep(1000);
+#ifndef WIN32
+        enableRawMode();
+#endif
+        return false;
     }
 
     MilliSleep(1000);  // Brief pause to show the confirmation
+    return true;
 }
 
 // Prompt user whether to auto-apply optimal threads after benchmark
@@ -2247,7 +2260,9 @@ static void toggleBenchmark(int screenHeight)
 
         // Ask user which modes to test
         bool testLight, testFast, testHugepages;
-        promptBenchmarkModes(screenHeight, testLight, testFast, testHugepages);
+        if (!promptBenchmarkModes(screenHeight, testLight, testFast, testHugepages)) {
+            return;
+        }
         benchmarkTestLight = testLight;
         benchmarkTestFast = testFast;
         benchmarkTestHugepages = testHugepages;

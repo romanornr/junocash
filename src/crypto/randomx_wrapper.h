@@ -111,6 +111,9 @@ bool RandomX_Verify(const void* input, size_t inputSize, const uint256& expected
  *                     for 5-10% additional performance. Requires system hugepages configured.
  *                     Falls back to normal memory if allocation fails.
  */
+// Set the NUMA node for the current thread (optimization)
+void RandomX_SetCurrentNode(int node);
+
 void RandomX_Init(bool fastMode = false, bool useHugePages = false);
 
 /**

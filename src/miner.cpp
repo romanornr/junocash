@@ -927,8 +927,12 @@ void static BitcoinMiner(const CChainParams& chainparams, int thread_id, int tot
     if (numa.IsNUMAAvailable()) {
         cpu_id = numa.GetCPUForThread(thread_id, total_threads);
         if (cpu_id >= 0 && numa.PinCurrentThread(cpu_id)) {
+            int node_id = numa.GetNodeForThread(thread_id, total_threads);
             LogPrint("numa", "NUMA: Thread %d pinned to CPU %d (node %d)\n",
-                     thread_id, cpu_id, numa.GetNodeForThread(thread_id, total_threads));
+                     thread_id, cpu_id, node_id);
+
+            // Set NUMA node for RandomX memory allocation to ensure local memory usage
+            RandomX_SetCurrentNode(node_id);
 
             // Sleep briefly to ensure thread migration completes (xmrig pattern)
             std::this_thread::sleep_for(std::chrono::milliseconds(1));

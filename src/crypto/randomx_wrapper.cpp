@@ -7,6 +7,14 @@
 #include "crypto/cpu_features.h"
 #include "util/system.h"
 
+#if defined(HAVE_CONFIG_H)
+#include "config/bitcoin-config.h"
+#endif
+
+#ifdef HAVE_NUMA
+#include <numa.h>
+#endif
+
 #include <mutex>
 #include <memory>
 #include <map>
@@ -14,6 +22,7 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <limits>
 
 // Global fast mode and hugepages flags
 static bool rx_fast_mode = false;
@@ -60,9 +69,17 @@ struct DatasetEntry {
 static std::map<uint256, std::shared_ptr<CacheEntry>> seed_caches;
 static std::mutex cache_map_mutex;
 
-// Map of seed hash -> dataset entry (for fast mode)
-static std::map<uint256, std::shared_ptr<DatasetEntry>> seed_datasets;
+// Map of seed hash -> node id -> dataset entry (for fast mode, per NUMA node)
+// Using map<int, ...> allows supporting -1 (any/default) and specific node IDs
+static std::map<uint256, std::map<int, std::shared_ptr<DatasetEntry>>> seed_datasets;
 static std::mutex dataset_map_mutex;
+
+// Thread-local NUMA node ID
+static thread_local int rx_node_id = -1;
+
+void RandomX_SetCurrentNode(int node) {
+    rx_node_id = node;
+}
 
 static bool rx_shutting_down = false;
 
@@ -194,17 +211,29 @@ static std::shared_ptr<DatasetEntry> GetOrCreateDataset(const uint256& seedhash,
 {
     std::lock_guard<std::mutex> lock(dataset_map_mutex);
 
-    // Check if dataset already exists
-    auto it = seed_datasets.find(seedhash);
-    if (it != seed_datasets.end() && it->second->initialized) {
-        it->second->last_used = GetTime();
-        return it->second;
+    // Use current thread's NUMA node (or -1 for default)
+    int nodeId = rx_node_id;
+
+    // Check if dataset already exists for this node
+    if (seed_datasets.count(seedhash) > 0) {
+        auto& nodeMap = seed_datasets[seedhash];
+        auto it = nodeMap.find(nodeId);
+        if (it != nodeMap.end() && it->second->initialized) {
+            it->second->last_used = GetTime();
+            return it->second;
+        }
     }
 
     // Create new dataset
-    LogPrintf("RandomX: Creating new dataset for seed %s (this takes ~30 seconds)%s...\n",
-              seedhash.GetHex(),
+    LogPrintf("RandomX: Creating new dataset for seed %s (node %d, ~30s)%s...\n",
+              seedhash.GetHex(), nodeId,
               rx_use_hugepages ? " (with hugepages)" : "");
+
+#ifdef HAVE_NUMA
+    if (nodeId >= 0) {
+        numa_set_preferred(nodeId);
+    }
+#endif
 
     randomx_flags flags = randomx_get_flags();
     flags |= RANDOMX_FLAG_JIT;
@@ -221,6 +250,12 @@ static std::shared_ptr<DatasetEntry> GetOrCreateDataset(const uint256& seedhash,
         flags = static_cast<randomx_flags>(static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
         entry->dataset = randomx_alloc_dataset(flags);
     }
+
+#ifdef HAVE_NUMA
+    if (nodeId >= 0) {
+        numa_set_preferred(-1); // Reset to default
+    }
+#endif
 
     if (!entry->dataset) {
         LogPrintf("RandomX: ERROR - Failed to allocate dataset (need ~2GB RAM)\n");
@@ -241,19 +276,27 @@ static std::shared_ptr<DatasetEntry> GetOrCreateDataset(const uint256& seedhash,
     entry->last_used = GetTime();
     entry->initialized = true;
 
-    seed_datasets[seedhash] = entry;
+    seed_datasets[seedhash][nodeId] = entry;
 
     LogPrintf("RandomX: Dataset initialized in %d ms using %d threads\n", (int)elapsed, numThreads);
 
-    // Cleanup old datasets (keep most recent 2 - they're 2GB each!)
+    // Cleanup old datasets (keep most recent 2 seeds)
     if (seed_datasets.size() > 2) {
         auto oldest = seed_datasets.begin();
-        for (auto check_it = seed_datasets.begin(); check_it != seed_datasets.end(); ++check_it) {
-            if (check_it->second->last_used < oldest->second->last_used) {
-                oldest = check_it;
+        // Find oldest seed by checking any of its datasets (they share same seed/time roughly)
+        uint64_t oldest_time = std::numeric_limits<uint64_t>::max();
+        
+        for (auto it = seed_datasets.begin(); it != seed_datasets.end(); ++it) {
+            if (!it->second.empty()) {
+                // Check first dataset in this seed's map
+                if (it->second.begin()->second->last_used < oldest_time) {
+                    oldest_time = it->second.begin()->second->last_used;
+                    oldest = it;
+                }
             }
         }
-        LogPrintf("RandomX: Evicting old dataset for seed %s\n", oldest->first.GetHex());
+        
+        LogPrintf("RandomX: Evicting old datasets for seed %s\n", oldest->first.GetHex());
         seed_datasets.erase(oldest);
     }
 
