@@ -1979,6 +1979,39 @@ static bool writeOptimalThreadsToConfig(int threads, const std::string& mode = "
         // Read existing config file and filter out old benchmark settings
         std::vector<std::string> existingLines;
         std::ifstream configFileRead(configPath.string());
+        
+        // Helper to check if a line sets a specific config option (handles whitespace)
+        auto isOption = [](const std::string& line, const std::string& option) -> bool {
+            // Find start of key (skip whitespace)
+            size_t keyStart = line.find_first_not_of(" \t");
+            if (keyStart == std::string::npos) return false; // Empty or whitespace only
+
+            // Check if comment
+            if (line[keyStart] == '#') return false;
+
+            // Check if key matches
+            if (line.compare(keyStart, option.length(), option) != 0) return false;
+
+            // Check what follows the key
+            size_t afterKey = keyStart + option.length();
+            if (afterKey >= line.length()) return false; // Key without value?
+
+            char nextChar = line[afterKey];
+            // Must be followed by '=' or whitespace then '='
+            if (nextChar == '=') return true;
+            if (nextChar == ' ' || nextChar == '\t') {
+                size_t equalPos = line.find('=', afterKey);
+                if (equalPos != std::string::npos) {
+                    // Check if only whitespace between key and '='
+                    for (size_t i = afterKey; i < equalPos; i++) {
+                        if (line[i] != ' ' && line[i] != '\t') return false;
+                    }
+                    return true;
+                }
+            }
+            return false;
+        };
+
         if (configFileRead.is_open()) {
             std::string line;
             bool skipNextLines = false;
@@ -1989,30 +2022,30 @@ static bool writeOptimalThreadsToConfig(int threads, const std::string& mode = "
                     continue;
                 }
 
-                // Skip old benchmark-related settings
+                // Skip old benchmark-related settings block
                 if (skipNextLines) {
-                    if (line.find("randomxfastmode=") == 0 ||
-                        line.find("randomxhugepages=") == 0 ||
-                        line.find("randomxmsr=") == 0 ||
-                        line.find("randomxcacheqos=") == 0 ||
-                        line.find("randomxexceptionhandling=") == 0 ||
-                        line.find("genproclimit=") == 0 ||
-                        line.find("gen=") == 0 ||
-                        line.find("# Best mode:") == 0 ||
+                    if (isOption(line, "randomxfastmode") ||
+                        isOption(line, "randomxhugepages") ||
+                        isOption(line, "randomxmsr") ||
+                        isOption(line, "randomxcacheqos") ||
+                        isOption(line, "randomxexceptionhandling") ||
+                        isOption(line, "genproclimit") ||
+                        isOption(line, "gen") ||
+                        line.find("# Best mode:") != std::string::npos ||
                         line.empty()) {
                         continue;  // Skip these lines
                     }
                     skipNextLines = false;  // Resume keeping lines
                 }
 
-                // Also remove any standalone duplicates from earlier runs
-                if (line.find("randomxfastmode=") == 0 ||
-                    line.find("randomxhugepages=") == 0 ||
-                    line.find("randomxmsr=") == 0 ||
-                    line.find("randomxcacheqos=") == 0 ||
-                    line.find("randomxexceptionhandling=") == 0 ||
-                    line.find("genproclimit=") == 0 ||
-                    line.find("gen=") == 0) {
+                // Also remove any standalone duplicates from earlier runs or manual edits
+                if (isOption(line, "randomxfastmode") ||
+                    isOption(line, "randomxhugepages") ||
+                    isOption(line, "randomxmsr") ||
+                    isOption(line, "randomxcacheqos") ||
+                    isOption(line, "randomxexceptionhandling") ||
+                    isOption(line, "genproclimit") ||
+                    isOption(line, "gen")) {
                     continue;  // Skip duplicates
                 }
 
