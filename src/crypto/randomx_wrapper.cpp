@@ -407,26 +407,14 @@ void RandomX_SetMainSeedHash(const void* seedhash, size_t size)
     LogPrintf("RandomX: Main seed set to %s\n", seed.GetHex());
 }
 
-// Hash with a specific seed
-bool RandomX_Hash_WithSeed(const void* seedhash, size_t seedhashSize,
-                           const void* input, size_t inputSize, void* output)
+// Get or create thread-local VM for a specific seed
+static randomx_vm* GetVM(const uint256& seed)
 {
-    if (!seedhash || seedhashSize != 32 || !input || !output) {
-        return false;
-    }
-
-    if (rx_shutting_down) {
-        return false;
-    }
-
-    uint256 seed;
-    memcpy(seed.begin(), seedhash, 32);
-
     // Get or create cache for this seed (always needed, even in fast mode for dataset init)
     auto cache_entry = GetOrCreateCache(seed);
     if (!cache_entry || !cache_entry->cache) {
         LogPrintf("RandomX: ERROR - Failed to get cache for seed\n");
-        return false;
+        return nullptr;
     }
 
     // Get or create dataset if in fast mode
@@ -502,7 +490,7 @@ bool RandomX_Hash_WithSeed(const void* seedhash, size_t seedhashSize,
 
         if (!vm) {
             LogPrintf("RandomX: ERROR - Failed to create VM\n");
-            return false;
+            return nullptr;
         }
 
         rxVM_thread.vms[seed] = vm;
@@ -510,8 +498,90 @@ bool RandomX_Hash_WithSeed(const void* seedhash, size_t seedhashSize,
         vm_it = rxVM_thread.vms.find(seed);
     }
 
+    return vm_it->second;
+}
+
+// Hash with a specific seed
+bool RandomX_Hash_WithSeed(const void* seedhash, size_t seedhashSize,
+                           const void* input, size_t inputSize, void* output)
+{
+    if (!seedhash || seedhashSize != 32 || !input || !output) {
+        return false;
+    }
+
+    if (rx_shutting_down) {
+        return false;
+    }
+
+    uint256 seed;
+    memcpy(seed.begin(), seedhash, 32);
+
+    randomx_vm* vm = GetVM(seed);
+    if (!vm) return false;
+
     // Calculate hash
-    randomx_calculate_hash(vm_it->second, input, inputSize, output);
+    randomx_calculate_hash(vm, input, inputSize, output);
+    return true;
+}
+
+bool RandomX_HashFirst(const void* input, size_t inputSize)
+{
+    if (!input) return false;
+    if (rx_shutting_down) return false;
+
+    uint256 seed;
+    {
+        std::unique_lock<std::mutex> lock(main_seed_mutex);
+        if (!main_seed_set) {
+            lock.unlock();
+            RandomX_Init(false);
+            lock.lock();
+        }
+        seed = main_seed;
+    }
+
+    randomx_vm* vm = GetVM(seed);
+    if (!vm) return false;
+
+    randomx_calculate_hash_first(vm, input, inputSize);
+    return true;
+}
+
+bool RandomX_HashNext(const void* nextInput, size_t nextInputSize, void* output)
+{
+    if (!nextInput || !output) return false;
+    if (rx_shutting_down) return false;
+
+    uint256 seed;
+    {
+        std::lock_guard<std::mutex> lock(main_seed_mutex);
+        if (!main_seed_set) return false;
+        seed = main_seed;
+    }
+
+    randomx_vm* vm = GetVM(seed);
+    if (!vm) return false;
+
+    randomx_calculate_hash_next(vm, nextInput, nextInputSize, output);
+    return true;
+}
+
+bool RandomX_HashLast(void* output)
+{
+    if (!output) return false;
+    if (rx_shutting_down) return false;
+
+    uint256 seed;
+    {
+        std::lock_guard<std::mutex> lock(main_seed_mutex);
+        if (!main_seed_set) return false;
+        seed = main_seed;
+    }
+
+    randomx_vm* vm = GetVM(seed);
+    if (!vm) return false;
+
+    randomx_calculate_hash_last(vm, output);
     return true;
 }
 
