@@ -567,63 +567,34 @@ bool RandomX_Hash_WithSeed(const void* seedhash, size_t seedhashSize,
     return true;
 }
 
-bool RandomX_HashFirst(const void* input, size_t inputSize)
+// Get thread-local VM for a specific seed
+randomx_vm* RandomX_GetVM(const void* seedhash, size_t seedhashSize)
 {
-    if (!input) return false;
-    if (rx_shutting_down) return false;
+    if (!seedhash || seedhashSize != 32) return nullptr;
+    if (rx_shutting_down) return nullptr;
 
     uint256 seed;
-    {
-        std::unique_lock<std::mutex> lock(main_seed_mutex);
-        if (!main_seed_set) {
-            lock.unlock();
-            RandomX_Init(false);
-            lock.lock();
-        }
-        seed = main_seed;
-    }
+    memcpy(seed.begin(), seedhash, 32);
+    return GetVM(seed);
+}
 
-    randomx_vm* vm = GetVM(seed);
-    if (!vm) return false;
-
+bool RandomX_HashFirst(randomx_vm* vm, const void* input, size_t inputSize)
+{
+    if (!vm || !input) return false;
     randomx_calculate_hash_first(vm, input, inputSize);
     return true;
 }
 
-bool RandomX_HashNext(const void* nextInput, size_t nextInputSize, void* output)
+bool RandomX_HashNext(randomx_vm* vm, const void* nextInput, size_t nextInputSize, void* output)
 {
-    if (!nextInput || !output) return false;
-    if (rx_shutting_down) return false;
-
-    uint256 seed;
-    {
-        std::lock_guard<std::mutex> lock(main_seed_mutex);
-        if (!main_seed_set) return false;
-        seed = main_seed;
-    }
-
-    randomx_vm* vm = GetVM(seed);
-    if (!vm) return false;
-
+    if (!vm || !nextInput || !output) return false;
     randomx_calculate_hash_next(vm, nextInput, nextInputSize, output);
     return true;
 }
 
-bool RandomX_HashLast(void* output)
+bool RandomX_HashLast(randomx_vm* vm, void* output)
 {
-    if (!output) return false;
-    if (rx_shutting_down) return false;
-
-    uint256 seed;
-    {
-        std::lock_guard<std::mutex> lock(main_seed_mutex);
-        if (!main_seed_set) return false;
-        seed = main_seed;
-    }
-
-    randomx_vm* vm = GetVM(seed);
-    if (!vm) return false;
-
+    if (!vm || !output) return false;
     randomx_calculate_hash_last(vm, output);
     return true;
 }

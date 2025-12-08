@@ -9,6 +9,9 @@
 #include <vector>
 #include <cstddef>
 
+// Forward declaration
+struct randomx_vm;
+
 /**
  * RandomX wrapper for Juno Cash
  *
@@ -38,6 +41,16 @@ uint64_t RandomX_SeedHeight(uint64_t height);
  * @param size Size of seed hash
  */
 void RandomX_SetMainSeedHash(const void* seedhash, size_t size);
+
+/**
+ * Get thread-local VM for a specific seed.
+ * This allows avoiding repeated lookups/locks in tight loops.
+ *
+ * @param seedhash Pointer to seed hash (32 bytes)
+ * @param seedhashSize Size of seed hash
+ * @return Pointer to initialized VM, or nullptr on error
+ */
+randomx_vm* RandomX_GetVM(const void* seedhash, size_t seedhashSize);
 
 /**
  * Calculate a RandomX hash with a specific seed.
@@ -83,10 +96,10 @@ bool RandomX_Hash_Block(const void* input, size_t inputSize, uint256& hash);
  * @param expectedHash The expected hash value
  * @return true if the hash matches, false otherwise
  */
-// Batch hashing API for pipelining
-bool RandomX_HashFirst(const void* input, size_t inputSize);
-bool RandomX_HashNext(const void* nextInput, size_t nextInputSize, void* output);
-bool RandomX_HashLast(void* output);
+// Batch hashing API for pipelining (VM-direct version)
+bool RandomX_HashFirst(randomx_vm* vm, const void* input, size_t inputSize);
+bool RandomX_HashNext(randomx_vm* vm, const void* nextInput, size_t nextInputSize, void* output);
+bool RandomX_HashLast(randomx_vm* vm, void* output);
 
 bool RandomX_Verify_WithSeed(const void* seedhash, size_t seedhashSize,
                              const void* input, size_t inputSize, const uint256& expectedHash);

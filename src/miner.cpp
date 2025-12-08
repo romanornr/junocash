@@ -1091,13 +1091,20 @@ void static BitcoinMiner(const CChainParams& chainparams, int thread_id, int tot
             uint64_t interruptCheckCounter = 0;
             const uint64_t INTERRUPT_CHECK_INTERVAL = 256;
 
+            // OPTIMIZATION: Get VM once per block template to avoid map lookups/locks in inner loop
+            randomx_vm* vm = RandomX_GetVM(seedHash.begin(), 32);
+            if (!vm) {
+                LogPrintf("Error: Failed to get RandomX VM\n");
+                break;
+            }
+
             // Pipeline state
             uint8_t noncePrev[32];
             uint256 hash;
 
             // Prime the pipeline: Start first hash
             memcpy(hash_input + 108, noncePtr, 32);
-            RandomX_HashFirst(hash_input, 140);
+            RandomX_HashFirst(vm, hash_input, 140);
             memcpy(noncePrev, noncePtr, 32);
             IncrementNonce256_Fast(noncePtr);
 
@@ -1107,7 +1114,7 @@ void static BitcoinMiner(const CChainParams& chainparams, int thread_id, int tot
 
                 // Pipelined hash: Finish previous (noncePrev), Start current (noncePtr)
                 // Note: We use the same input buffer for next input, which is safe as RandomX consumes it immediately
-                if (!RandomX_HashNext(hash_input, 140, hash.begin())) {
+                if (!RandomX_HashNext(vm, hash_input, 140, hash.begin())) {
                     LogPrintf("RandomX hashing failed\n");
                     break;
                 }
