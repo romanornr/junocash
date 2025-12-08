@@ -349,6 +349,8 @@ void RandomX_ChangeMode(bool fastMode, bool useHugePages)
 // Initialize RandomX
 void RandomX_Init(bool fastMode, bool useHugePages)
 {
+    rx_shutting_down = false;
+
     if (rx_initialized.exchange(true)) {
         return;  // Already initialized
     }
