@@ -1,8 +1,5 @@
-mingw32_CC=clang -target $(host) -B$(build_prefix)/bin
-mingw32_CXX=clang++ -target $(host) -B$(build_prefix)/bin
-
 mingw32_CFLAGS=-pipe
-mingw32_CXXFLAGS=$(mingw32_CFLAGS)
+mingw32_CXXFLAGS=$(mingw32_CFLAGS) -isystem $(host_prefix)/include/c++/v1
 
 mingw32_LDFLAGS?=-fuse-ld=lld
 mingw32_LDFLAGS+=-L/usr/lib/gcc/x86_64-w64-mingw32/$(shell x86_64-w64-mingw32-g++-posix -dumpversion)
