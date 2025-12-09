@@ -501,6 +501,8 @@ crypto_libbitcoin_crypto_a_SOURCES = \
   crypto/randomx/argon2_core.h \
   crypto/randomx/argon2.h \
   crypto/randomx/argon2_ref.c \
+  crypto/randomx/argon2_ssse3.c \
+  crypto/randomx/argon2_avx2.c \
   crypto/randomx/assembly_generator_x86.cpp \
   crypto/randomx/assembly_generator_x86.hpp \
   crypto/randomx/blake2/blake2b.c \
@@ -590,7 +592,7 @@ crypto_libbitcoin_crypto_sse41_a_CXXFLAGS += $(SSE41_CXXFLAGS)
 crypto_libbitcoin_crypto_sse41_a_CPPFLAGS += -DENABLE_SSE41
 LIBBITCOIN_CRYPTO += $(LIBBITCOIN_CRYPTO_SSE41)
 endif
-crypto_libbitcoin_crypto_sse41_a_SOURCES = crypto/sha256_sse41.cpp crypto/randomx/argon2_ssse3.c
+crypto_libbitcoin_crypto_sse41_a_SOURCES = crypto/sha256_sse41.cpp
 
 crypto_libbitcoin_crypto_avx2_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libbitcoin_crypto_avx2_a_CPPFLAGS = $(AM_CPPFLAGS)
@@ -599,7 +601,7 @@ crypto_libbitcoin_crypto_avx2_a_CXXFLAGS += $(AVX2_CXXFLAGS)
 crypto_libbitcoin_crypto_avx2_a_CPPFLAGS += -DENABLE_AVX2
 LIBBITCOIN_CRYPTO += $(LIBBITCOIN_CRYPTO_AVX2)
 endif
-crypto_libbitcoin_crypto_avx2_a_SOURCES = crypto/sha256_avx2.cpp crypto/randomx/argon2_avx2.c
+crypto_libbitcoin_crypto_avx2_a_SOURCES = crypto/sha256_avx2.cpp
 
 crypto_libbitcoin_crypto_shani_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libbitcoin_crypto_shani_a_CPPFLAGS = $(AM_CPPFLAGS)

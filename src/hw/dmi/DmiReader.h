@@ -27,6 +27,7 @@
 
 
 #include <functional>
+#include <vector>
 
 
 namespace xmrig {
