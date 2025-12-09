@@ -266,6 +266,12 @@ BITCOIN_CORE_H = \
   fs.h \
   httprpc.h \
   httpserver.h \
+  hw/dmi/Alignment.h \
+  hw/dmi/DmiBoard.h \
+  hw/dmi/DmiMemory.h \
+  hw/dmi/DmiReader.h \
+  hw/dmi/DmiTools.h \
+  hw/dmi/String.h \
   init.h \
   int128.h \
   key.h \
