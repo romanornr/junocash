@@ -194,6 +194,16 @@ bool CCoinsViewCache::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &t
 }
 
 bool CCoinsViewCache::GetOrchardAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const {
+    // Juno Cash: Handle empty_root specially before checking cache.
+    // This prevents assertion failures when PopAnchor incorrectly marks
+    // empty_root as entered=false in the cache (which can happen if
+    // hashFinalOrchardRoot is null instead of empty_root on a block index).
+    if (rt == OrchardMerkleFrontier::empty_root()) {
+        OrchardMerkleFrontier new_tree;
+        tree = new_tree;
+        return true;
+    }
+
     CAnchorsOrchardMap::const_iterator it = cacheOrchardAnchors.find(rt);
     if (it != cacheOrchardAnchors.end()) {
         if (it->second.entered) {

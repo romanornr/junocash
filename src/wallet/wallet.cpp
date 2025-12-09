@@ -4601,10 +4601,20 @@ std::optional<int> CWallet::ScanForWalletTransactions(
         // our wallet birthday (as adjusted for block time variability).
         // If there is an Orchard wallet checkpoint, the rewind point must not
         // be advanced past the last Orchard wallet checkpoint height.
+        //
+        // IMPORTANT: When -reindex or -rescan is explicitly requested, we must bypass
+        // this optimization and scan from the beginning to ensure we don't miss any
+        // coins. During -reindex, nTimeFirstKey may be set to key creation time (recent),
+        // causing old blocks containing coins to be skipped.
         auto optOrchardCheckpointHeight = orchardWallet.GetLastCheckpointHeight();
-        while (chainActive.Next(pindex) != NULL && nTimeFirstKey && pindex->GetBlockTime() < nTimeFirstKey - TIMESTAMP_WINDOW &&
-               (!optOrchardCheckpointHeight.has_value() || pindex->nHeight < optOrchardCheckpointHeight.value())) {
-            pindex = chainActive.Next(pindex);
+        bool forceFullScan = isInitScan && (GetBoolArg("-rescan", false) || fReindex);
+        if (!forceFullScan) {
+            while (chainActive.Next(pindex) != NULL && nTimeFirstKey && pindex->GetBlockTime() < nTimeFirstKey - TIMESTAMP_WINDOW &&
+                   (!optOrchardCheckpointHeight.has_value() || pindex->nHeight < optOrchardCheckpointHeight.value())) {
+                pindex = chainActive.Next(pindex);
+            }
+        } else {
+            LogPrintf("ScanForWalletTransactions: Forced full scan from height %d due to -rescan or -reindex\n", pindex->nHeight);
         }
 
         // Attempt to rewind the orchard wallet to the rescan point if the wallet has any

@@ -19,12 +19,18 @@
 
 #include <rust/metrics.h>
 
+// Zcash version constants - Juno Cash always writes data in latest format
+// (these are historical Zcash versions, kept for reference)
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
 static const int CHAIN_HISTORY_ROOT_VERSION = 2010200;
 static const int NU5_DATA_VERSION = 4050000;
 static const int TRANSPARENT_VALUE_VERSION = 5040026;
 static const int NU6_DATA_VERSION = 5100025;
+// Juno Cash: Always persist nCachedBranchId for all validated blocks,
+// not just activation blocks, to prevent chain rewinding on restart
+// Note: Version 90551 is 0.9.5 build 51 (current is 0.9.5 build 50)
+static const int BRANCH_ID_ALWAYS_VERSION = 90551;
 
 /**
  * Maximum amount of time that a block timestamp is allowed to be ahead of the
@@ -562,6 +568,7 @@ public:
             READWRITE(VARINT(nDataPos));
         if (nStatus & BLOCK_HAVE_UNDO)
             READWRITE(VARINT(nUndoPos));
+        // For BLOCK_ACTIVATES_UPGRADE blocks, always persist branch ID (legacy behavior)
         if (nStatus & BLOCK_ACTIVATES_UPGRADE) {
             if (ser_action.ForRead()) {
                 uint32_t branchId;
@@ -630,6 +637,27 @@ public:
         // was NU6-aware, these are always null / zero.
         if ((s.GetType() & SER_DISK) && (nVersion >= NU6_DATA_VERSION)) {
             READWRITE(nLockboxValue);
+        }
+
+        // Juno Cash: For validated blocks that are NOT activation blocks, persist
+        // nCachedBranchId to prevent chain rewinding on restart. On read, if we
+        // don't have a cached branch ID from the BLOCK_ACTIVATES_UPGRADE path above,
+        // read it from this position (for blocks written by this version or later).
+        // Non-activation blocks have their nCachedBranchId set by LoadBlockIndexDB()
+        // when loading older database formats.
+        if ((s.GetType() & SER_DISK) && (nVersion >= BRANCH_ID_ALWAYS_VERSION)) {
+            // Only persist for non-activation blocks that have validated scripts
+            if (!(nStatus & BLOCK_ACTIVATES_UPGRADE) && (nStatus & BLOCK_VALID_SCRIPTS)) {
+                if (ser_action.ForRead()) {
+                    uint32_t branchId;
+                    READWRITE(branchId);
+                    nCachedBranchId = branchId;
+                } else {
+                    // For writing, nCachedBranchId should be set for validated blocks
+                    uint32_t branchId = nCachedBranchId.value_or(0);
+                    READWRITE(branchId);
+                }
+            }
         }
 
         // If you have just added new serialized fields above, remember to add

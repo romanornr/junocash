@@ -6002,13 +6002,32 @@ bool static LoadBlockIndexDB(const CChainParams& chainparams)
     it->second->hashFinalSproutRoot = pcoinsTip->GetBestAnchor(SPROUT);
 
     // Juno Cash: Also set Sapling and Orchard roots for the best block from database
+    // and verify the anchors actually exist (defensive check for database inconsistency)
     if (genesisConsensus.NetworkUpgradeActive(it->second->nHeight, Consensus::UPGRADE_SAPLING)) {
-        it->second->hashFinalSaplingRoot = pcoinsTip->GetBestAnchor(SAPLING);
-        LogPrintf("Juno Cash: Set best block Sapling root from database: %s\n", it->second->hashFinalSaplingRoot.ToString());
+        uint256 saplingAnchor = pcoinsTip->GetBestAnchor(SAPLING);
+        SaplingMerkleTree saplingTree;
+        if (pcoinsTip->GetSaplingAnchorAt(saplingAnchor, saplingTree)) {
+            it->second->hashFinalSaplingRoot = saplingAnchor;
+            LogPrintf("Juno Cash: Set best block Sapling root from database: %s\n", it->second->hashFinalSaplingRoot.ToString());
+        } else {
+            // Anchor doesn't exist in database - use empty_root
+            LogPrintf("Juno Cash: WARNING - Best Sapling anchor %s not found in database, using empty_root\n", saplingAnchor.ToString());
+            it->second->hashFinalSaplingRoot = SaplingMerkleTree::empty_root();
+            pcoinsTip->PushAnchor(SaplingMerkleTree());
+        }
     }
     if (genesisConsensus.NetworkUpgradeActive(it->second->nHeight, Consensus::UPGRADE_NU5)) {
-        it->second->hashFinalOrchardRoot = pcoinsTip->GetBestAnchor(ORCHARD);
-        LogPrintf("Juno Cash: Set best block Orchard root from database: %s\n", it->second->hashFinalOrchardRoot.ToString());
+        uint256 orchardAnchor = pcoinsTip->GetBestAnchor(ORCHARD);
+        OrchardMerkleFrontier orchardTree;
+        if (pcoinsTip->GetOrchardAnchorAt(orchardAnchor, orchardTree)) {
+            it->second->hashFinalOrchardRoot = orchardAnchor;
+            LogPrintf("Juno Cash: Set best block Orchard root from database: %s\n", it->second->hashFinalOrchardRoot.ToString());
+        } else {
+            // Anchor doesn't exist in database - use empty_root
+            LogPrintf("Juno Cash: WARNING - Best Orchard anchor %s not found in database, using empty_root\n", orchardAnchor.ToString());
+            it->second->hashFinalOrchardRoot = OrchardMerkleFrontier::empty_root();
+            pcoinsTip->PushAnchor(OrchardMerkleFrontier());
+        }
     }
 
     PruneBlockIndexCandidates();
