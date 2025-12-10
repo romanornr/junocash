@@ -4696,18 +4696,17 @@ std::optional<int> CWallet::ScanForWalletTransactions(
             }
 
             MerkleFrontiers frontiers;
-            // Juno Cash: Skip all anchor assertions during wallet rescan
-            // These checks are not needed during rescan - ConnectBlock already validates anchors
-            // Skipping prevents assertion failures when anchors may not be in database yet
-            // assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, frontiers.sprout));
-            // if (pindex->pprev) {
-            //     if (consensus.NetworkUpgradeActive(pindex->pprev->nHeight,  Consensus::UPGRADE_SAPLING)) {
-            //         assert(pcoinsTip->GetSaplingAnchorAt(pindex->pprev->hashFinalSaplingRoot, frontiers.sapling));
-            //     }
-            //     if (consensus.NetworkUpgradeActive(pindex->pprev->nHeight,  Consensus::UPGRADE_NU5)) {
-            //         assert(pcoinsTip->GetOrchardAnchorAt(pindex->pprev->hashFinalOrchardRoot, frontiers.orchard));
-            //     }
-            // }
+            // This should never fail: we should always be able to get the tree
+            // state on the path to the tip of our chain
+            assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, frontiers.sprout));
+            if (pindex->pprev) {
+                if (consensus.NetworkUpgradeActive(pindex->pprev->nHeight, Consensus::UPGRADE_SAPLING)) {
+                    assert(pcoinsTip->GetSaplingAnchorAt(pindex->pprev->hashFinalSaplingRoot, frontiers.sapling));
+                }
+                if (consensus.NetworkUpgradeActive(pindex->pprev->nHeight, Consensus::UPGRADE_NU5)) {
+                    assert(pcoinsTip->GetOrchardAnchorAt(pindex->pprev->hashFinalOrchardRoot, frontiers.orchard));
+                }
+            }
             // Increment note witness caches
             ChainTipAdded(pindex, &block, frontiers, performOrchardWalletUpdates);
 
