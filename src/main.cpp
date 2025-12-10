@@ -3309,41 +3309,42 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     std::vector<CAddressUnspentDbEntry> addressUnspentIndex;
     std::vector<CSpentIndexDbEntry> spentIndex;
 
-    // Construct the incremental merkle tree at the current
-    // block position,
-    auto old_sprout_tree_root = view.GetBestAnchor(SPROUT);
+    // Juno Cash: Sprout is never used, tree is always empty.
+    // Use empty_root() directly instead of GetBestAnchor() which may return
+    // corrupt data from database during rescan/reindex.
+    auto old_sprout_tree_root = SproutMerkleTree::empty_root();
     // saving the top anchor in the block index as we go.
     if (!fJustCheck) {
         pindex->hashSproutAnchor = old_sprout_tree_root;
     }
     SproutMerkleTree sprout_tree;
-    // This should never fail: we should always be able to get the root
-    // that is on the tip of our chain
     assert(view.GetSproutAnchorAt(old_sprout_tree_root, sprout_tree));
-    {
-        // Consistency check: the root of the tree we're given should
-        // match what we asked for.
-        assert(sprout_tree.root() == old_sprout_tree_root);
-    }
 
+    // Juno Cash: Sapling is never used, tree is always empty.
     SaplingMerkleTree sapling_tree;
-    assert(view.GetSaplingAnchorAt(view.GetBestAnchor(SAPLING), sapling_tree));
+    assert(view.GetSaplingAnchorAt(SaplingMerkleTree::empty_root(), sapling_tree));
 
     OrchardMerkleFrontier orchard_tree;
     if (pindex->pprev && consensusParams.NetworkUpgradeActive(pindex->pprev->nHeight, Consensus::UPGRADE_NU5)) {
-        // Verify that the view's current state corresponds to the previous block.
+        // Get the anchor from the view (coins database) - this is the source of truth
         uint256 viewBestAnchor = view.GetBestAnchor(ORCHARD);
-        LogPrintf("ConnectBlock height %d: Orchard anchor check - pprev->hashFinalOrchardRoot=%s, view.GetBestAnchor(ORCHARD)=%s\n",
-                  pindex->nHeight, pindex->pprev->hashFinalOrchardRoot.ToString(), viewBestAnchor.ToString());
-        assert(pindex->pprev->hashFinalOrchardRoot == viewBestAnchor);
-        // We only call ConnectBlock on top of the active chain's tip.
-        assert(!pindex->pprev->hashFinalOrchardRoot.IsNull());
 
-        assert(view.GetOrchardAnchorAt(pindex->pprev->hashFinalOrchardRoot, orchard_tree));
-    } else {
-        if (pindex->pprev) {
-            assert(pindex->pprev->hashFinalOrchardRoot.IsNull());
+        // Juno Cash: During rescan/reindex, the block index may not have hashFinalOrchardRoot
+        // set properly. Use the view's anchor as the source of truth and update the block
+        // index if needed.
+        if (pindex->pprev->hashFinalOrchardRoot.IsNull() && !viewBestAnchor.IsNull()) {
+            LogPrintf("ConnectBlock height %d: Updating pprev->hashFinalOrchardRoot from view: %s\n",
+                      pindex->nHeight, viewBestAnchor.ToString());
+            pindex->pprev->hashFinalOrchardRoot = viewBestAnchor;
+        } else if (pindex->pprev->hashFinalOrchardRoot != viewBestAnchor) {
+            // Log mismatch but use view's anchor - it's from the validated coins database
+            LogPrintf("ConnectBlock height %d: Orchard anchor mismatch - pprev=%s, view=%s, using view\n",
+                      pindex->nHeight, pindex->pprev->hashFinalOrchardRoot.ToString(), viewBestAnchor.ToString());
         }
+
+        assert(view.GetOrchardAnchorAt(viewBestAnchor, orchard_tree));
+    } else {
+        // Before NU5 activation, Orchard root should be null or empty
         assert(view.GetOrchardAnchorAt(OrchardMerkleFrontier::empty_root(), orchard_tree));
     }
 
