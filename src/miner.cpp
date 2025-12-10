@@ -1137,6 +1137,9 @@ void static BitcoinMiner(const CChainParams& chainparams, int thread_id, int tot
             // This replaces IncrementExtraNonce for work distribution
             GetRandBytes(pblock->nNonce.begin(), 32);
 
+            // Calculate merkle root (required since we bypass IncrementExtraNonce)
+            pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+
             LogPrintf("Running JunoMonetaMiner with %u transactions in block (%u bytes)\n", pblock->vtx.size(),
                 ::GetSerializeSize(*pblock, SER_NETWORK, PROTOCOL_VERSION));
 
