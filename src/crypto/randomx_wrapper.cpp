@@ -133,7 +133,13 @@ static std::shared_ptr<CacheEntry> GetOrCreateCache(const uint256& seedhash)
               rx_use_hugepages ? " (with hugepages)" : "");
 
     randomx_flags flags = randomx_get_flags();
+
+#ifdef ENABLE_RANDOMX_JIT
     flags |= RANDOMX_FLAG_JIT;
+    LogPrintf("RandomX: JIT compilation enabled\n");
+#else
+    LogPrintf("RandomX: JIT compilation disabled (interpreted mode)\n");
+#endif
 
     if (rx_use_hugepages) {
         flags |= RANDOMX_FLAG_LARGE_PAGES;
@@ -236,7 +242,9 @@ static std::shared_ptr<DatasetEntry> GetOrCreateDataset(const uint256& seedhash,
 #endif
 
     randomx_flags flags = randomx_get_flags();
+#ifdef ENABLE_RANDOMX_JIT
     flags |= RANDOMX_FLAG_JIT;
+#endif
 
     if (rx_use_hugepages) {
         flags |= RANDOMX_FLAG_LARGE_PAGES;
@@ -492,7 +500,9 @@ static randomx_vm* GetVM(const uint256& seed)
 
     if (need_new_vm) {
         randomx_flags flags = randomx_get_flags();
+#ifdef ENABLE_RANDOMX_JIT
         flags |= RANDOMX_FLAG_JIT;
+#endif
 
         if (rx_use_hugepages) {
             flags |= RANDOMX_FLAG_LARGE_PAGES;

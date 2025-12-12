@@ -186,6 +186,16 @@ if test "x$use_asm" = xyes; then
   AC_DEFINE(USE_ASM, 1, [Define this symbol to build in assembly routines])
 fi
 
+AC_ARG_ENABLE([randomx-jit],
+  [AS_HELP_STRING([--disable-randomx-jit],
+  [disable RandomX JIT compilation, use interpreted mode for VPS compatibility (default is enabled)])],
+  [enable_randomx_jit=$enableval],
+  [enable_randomx_jit=yes])
+
+if test "x$enable_randomx_jit" = xyes; then
+  AC_DEFINE(ENABLE_RANDOMX_JIT, 1, [Define this symbol to enable RandomX JIT compilation])
+fi
+
 AC_ARG_ENABLE([zmq],
   [AS_HELP_STRING([--disable-zmq],
   [disable ZMQ notifications])],
@@ -1360,4 +1370,4 @@ echo "  CXX           = $CXX"
 echo "  CXXFLAGS      = $DEBUG_CXXFLAGS $HARDENED_CXXFLAGS $ERROR_CXXFLAGS $GPROF_CXXFLAGS $CXXFLAGS"
 echo "  LDFLAGS       = $PTHREAD_CFLAGS $HARDENED_LDFLAGS $GPROF_LDFLAGS $LDFLAGS"
 echo "  ARFLAGS       = $ARFLAGS"
-echo 
+echo
