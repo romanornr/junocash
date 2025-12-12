@@ -7551,7 +7551,10 @@ bool static ProcessMessage(const CChainParams& chainparams, CNode* pfrom, string
                  pfrom->GetId(),
                  fLogIPs ? ", peeraddr=" + pfrom->addr.ToString() : "");
 
-        addrman.Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
+        {
+            LOCK(cs_main);
+            addrman.Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
+        }
         if (vAddr.size() < 1000)
             pfrom->fGetAddr = false;
         if (pfrom->fOneShot)
