@@ -33,7 +33,7 @@ echo -e "\n${GREEN}Generating configure script...${NC}"
 
 # Configure
 echo -e "\n${GREEN}Configuring...${NC}"
-CONFIG_SITE="$PWD/depends/x86_64-pc-linux-gnu/share/config.site" ./configure --disable-tests
+CONFIG_SITE="$PWD/depends/x86_64-pc-linux-gnu/share/config.site" ./configure --disable-tests --disable-randomx-jit
 
 # Build
 echo -e "\n${GREEN}Building JunoCash...${NC}"
