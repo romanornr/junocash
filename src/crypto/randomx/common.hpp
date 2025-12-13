@@ -114,7 +114,13 @@ namespace randomx {
 #endif
 #endif
 
-#if defined(_M_X64) || defined(__x86_64__)
+// RANDOMX_DISABLE_JIT can be defined at compile time to force interpreted mode
+// This is useful for VPS environments with W^X kernel protection that blocks JIT
+#if defined(RANDOMX_DISABLE_JIT)
+	#define RANDOMX_HAVE_COMPILER 0
+	class JitCompilerFallback;
+	using JitCompiler = JitCompilerFallback;
+#elif defined(_M_X64) || defined(__x86_64__)
 	#define RANDOMX_HAVE_COMPILER 1
 	#define RANDOMX_COMPILER_X86
 	class JitCompilerX86;
