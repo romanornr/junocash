@@ -194,6 +194,12 @@ AC_ARG_ENABLE([randomx-jit],
 
 if test "x$enable_randomx_jit" = xyes; then
   AC_DEFINE(ENABLE_RANDOMX_JIT, 1, [Define this symbol to enable RandomX JIT compilation])
+else
+  dnl Define RANDOMX_DISABLE_JIT to force interpreted mode at compile time
+  dnl This prevents the JIT compiler from being compiled in, which is required
+  dnl for VPS environments with W^X kernel protection that blocks JIT execution
+  CPPFLAGS="$CPPFLAGS -DRANDOMX_DISABLE_JIT"
+  AC_MSG_NOTICE([RandomX JIT disabled - using interpreted mode for VPS compatibility])
 fi
 
 AC_ARG_ENABLE([zmq],
