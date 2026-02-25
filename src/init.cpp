@@ -501,8 +501,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-gen", strprintf(_("Generate coins (default: %u)"), DEFAULT_GENERATE));
     strUsage += HelpMessageOpt("-genproclimit=<n>", strprintf(_("Set the number of threads for coin generation if enabled (-1 = all cores, default: %d)"), DEFAULT_GENERATE_THREADS));
     strUsage += HelpMessageOpt("-equihashsolver=<name>", _("Specify the Equihash solver to be used if enabled (default: \"default\")"));
-    strUsage += HelpMessageOpt("-mineraddress=<addr>", _("(NOT NECESSARY) Send mined coins to a specific transparent P2PKH address (t...). A new address is generated per block if not set. Use t_getminingaddress RPC to get an address."));
-    strUsage += HelpMessageOpt("-randomxfastmode", _("Use RandomX fast mode with 2GB dataset for ~2x mining speed (default: 0)"));
+    strUsage += HelpMessageOpt("-mineraddress=<addr>", _("Override the default mining address. If not set, uses the wallet's default transparent address. Set to empty (mineraddress=) to generate a new address per block."));
+    strUsage += HelpMessageOpt("-randomxfastmode", _("Use RandomX fast mode with 2GB dataset for ~2x mining speed (default: auto-enabled when -gen=1, otherwise 0)"));
     strUsage += HelpMessageOpt("-randomxmsr", _("Enable MSR (Model Specific Register) optimizations for 10-15% hashrate improvement (default: 1, requires setup-msr-permissions.sh)"));
     strUsage += HelpMessageOpt("-randomxcacheqos", _("Enable L3 cache QoS allocation for mining threads, 2-5% additional improvement (default: 1, requires -randomxmsr=1)"));
     strUsage += HelpMessageOpt("-randomxexceptionhandling", _("Enable Ryzen JIT exception handling for stability (default: 1)"));
@@ -1810,7 +1810,19 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
                 // Juno Cash: Initialize RandomX before loading block index
                 // This is required for PoW validation during LoadBlockIndex
-                bool randomxFastMode = GetBoolArg("-randomxfastmode", false);
+                // Auto-enable fast mode for miners unless explicitly disabled
+                bool miningEnabled = GetBoolArg("-gen", false);
+                bool randomxFastMode;
+                if (mapArgs.count("-randomxfastmode")) {
+                    // User explicitly set the mode
+                    randomxFastMode = GetBoolArg("-randomxfastmode", false);
+                } else {
+                    // Auto-detect: fast mode for miners, light mode for non-miners
+                    randomxFastMode = miningEnabled;
+                    if (miningEnabled) {
+                        LogPrintf("RandomX: Auto-enabling fast mode for mining (use -randomxfastmode=0 to override)\n");
+                    }
+                }
                 bool randomxHugePages = GetBoolArg("-randomxhugepages", false);
                 RandomX_Init(randomxFastMode, randomxHugePages);
 
@@ -1992,6 +2004,17 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
     if (GetArg("-mineraddress", "").empty() && GetBoolArg("-gen", false)) {
         return InitError(_("Juno Cash was not built with wallet support. Set -mineraddress, or rebuild Juno Cash with wallet support."));
+    }
+ #else // ENABLE_WALLET
+    // If -mineraddress is NOT PRESENT (not even empty), use the wallet's default address
+    // This allows "mineraddress=" (explicitly empty) to keep current behavior (new addr per block)
+    if (pwalletMain && !mapArgs.count("-mineraddress")) {
+        if (pwalletMain->vchDefaultKey.IsValid()) {
+            KeyIO keyIO(chainparams);
+            std::string defaultMiningAddr = keyIO.EncodeDestination(pwalletMain->vchDefaultKey.GetID());
+            mapArgs["-mineraddress"] = defaultMiningAddr;
+            LogPrintf("Mining address: %s (wallet default)\n", defaultMiningAddr);
+        }
     }
  #endif // !ENABLE_WALLET
 

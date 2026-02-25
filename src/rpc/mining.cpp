@@ -104,6 +104,24 @@ UniValue getlocalsolps(const UniValue& params, bool fHelp)
     return GetLocalSolPS();
 }
 
+UniValue getlocalhashps(const UniValue& params, bool fHelp)
+{
+    if (fHelp)
+        throw runtime_error(
+            "getlocalhashps\n"
+            "\nReturns the average local hashes per second since this node was started.\n"
+            "This is the same information shown on the metrics screen (if enabled).\n"
+            "\nResult:\n"
+            "xxx.xxxxx     (numeric) Hashes per second average\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getlocalhashps", "")
+            + HelpExampleRpc("getlocalhashps", "")
+       );
+
+    LOCK(cs_main);
+    return GetLocalSolPS();
+}
+
 UniValue getnetworksolps(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 2)
@@ -128,20 +146,17 @@ UniValue getnetworksolps(const UniValue& params, bool fHelp)
 
 UniValue getnetworkhashps(const UniValue& params, bool fHelp)
 {
-    if (!fEnableGetNetworkHashPS || fHelp || params.size() > 2)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
             "getnetworkhashps ( blocks height )\n"
-            + Deprecated(fEnableGetNetworkHashPS,
-                         "getnetworkhashps",
-                         "Please use getnetworksolps instead.") +
-            "\nReturns the estimated network solutions per second based on the last n blocks.\n"
+            "\nReturns the estimated network hashes per second based on the last n blocks.\n"
             "Pass in [blocks] to override # of blocks, -1 specifies over difficulty averaging window.\n"
             "Pass in [height] to estimate the network speed at the time when a certain block was found.\n"
             "\nArguments:\n"
             "1. blocks     (numeric, optional, default=120) The number of blocks, or -1 for blocks over difficulty averaging window.\n"
             "2. height     (numeric, optional, default=-1) To estimate at the time of the given height.\n"
             "\nResult:\n"
-            "x             (numeric) Solutions per second estimated\n"
+            "x             (numeric) Hashes per second estimated\n"
             "\nExamples:\n"
             + HelpExampleCli("getnetworkhashps", "")
             + HelpExampleRpc("getnetworkhashps", "")
@@ -388,9 +403,10 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("errors",           warnings.first);
     obj.pushKV("errorstimestamp",  warnings.second);
     obj.pushKV("genproclimit",     (int)GetArg("-genproclimit", DEFAULT_GENERATE_THREADS));
+    obj.pushKV("localhashps",      getlocalhashps(params, false));
     obj.pushKV("localsolps"  ,     getlocalsolps(params, false));
+    obj.pushKV("networkhashps",    getnetworkhashps(params, false));
     obj.pushKV("networksolps",     getnetworksolps(params, false));
-    obj.pushKV("networkhashps",    getnetworksolps(params, false));
     obj.pushKV("pooledtx",         (uint64_t)mempool.size());
     obj.pushKV("testnet",          Params().TestnetToBeDeprecatedFieldRPC());
     obj.pushKV("chain",            Params().NetworkIDString());
@@ -1104,8 +1120,9 @@ UniValue getblocksubsidy(const UniValue& params, bool fHelp)
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
-    { "mining",             "getlocalsolps",          &getlocalsolps,          true  },
-    { "mining",             "getnetworksolps",        &getnetworksolps,        true  },
+    { "hidden",             "getlocalsolps",          &getlocalsolps,          true  },
+    { "mining",             "getlocalhashps",         &getlocalhashps,         true  },
+    { "hidden",             "getnetworksolps",        &getnetworksolps,        true  },
     { "mining",             "getnetworkhashps",       &getnetworkhashps,       true  },
     { "mining",             "getmininginfo",          &getmininginfo,          true  },
     { "mining",             "prioritisetransaction",  &prioritisetransaction,  true  },

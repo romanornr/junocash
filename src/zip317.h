@@ -13,7 +13,9 @@
 #include <vector>
 
 // Constants for fee calculation.
-static const CAmount MARGINAL_FEE = 5000;
+static const CAmount MARGINAL_FEE = 100000;
+static const CAmount SHIELDING_MARGINAL_FEE = 5000;
+static const CAmount WALLET_MARGINAL_FEE = 100000;
 static const size_t GRACE_ACTIONS = 2;
 static const size_t P2PKH_STANDARD_INPUT_SIZE = 150;
 static const size_t P2PKH_STANDARD_OUTPUT_SIZE = 34;
@@ -32,6 +34,9 @@ static const CAmount MINIMUM_FEE = MARGINAL_FEE * GRACE_ACTIONS;
 /// Return the conventional fee for the given `logicalActionCount` calculated according to
 /// <https://zips.z.cash/zip-0317#fee-calculation>.
 CAmount CalculateConventionalFee(size_t logicalActionCount);
+
+/// Return the conventional fee using the shielding marginal fee when spendsCoinbase is true.
+CAmount CalculateConventionalFee(size_t logicalActionCount, bool spendsCoinbase);
 
 /// Return the number of logical actions calculated according to
 /// <https://zips.z.cash/zip-0317#fee-calculation>.

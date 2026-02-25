@@ -28,6 +28,7 @@
 static bool rx_fast_mode = false;
 static bool rx_use_hugepages = false;
 static std::atomic<bool> rx_initialized{false};
+static std::atomic<bool> rx_building_dataset{false};
 
 // Scratchpad prefetch mode (default to T0 - best for most CPUs)
 static RandomX_ScratchpadPrefetchMode rx_prefetch_mode = RANDOMX_PREFETCH_T0;
@@ -275,9 +276,11 @@ static std::shared_ptr<DatasetEntry> GetOrCreateDataset(const uint256& seedhash,
     if (numThreads < 1) numThreads = 4;  // Fallback
     if (numThreads > 16) numThreads = 16;  // Cap at 16 threads
 
+    rx_building_dataset.store(true);
     auto startTime = std::chrono::steady_clock::now();
     InitDatasetParallel(entry->dataset, cache_entry->cache, numThreads);
     auto endTime = std::chrono::steady_clock::now();
+    rx_building_dataset.store(false);
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
     entry->seedhash = seedhash;
@@ -322,6 +325,11 @@ bool RandomX_IsUsingHugepages()
     return rx_use_hugepages;
 }
 
+bool RandomX_IsBuildingDataset()
+{
+    return rx_building_dataset.load();
+}
+
 // Change mode at runtime without full shutdown/reinit
 void RandomX_ChangeMode(bool fastMode, bool useHugePages)
 {
@@ -360,7 +368,14 @@ void RandomX_Init(bool fastMode, bool useHugePages)
     rx_shutting_down = false;
 
     if (rx_initialized.exchange(true)) {
-        return;  // Already initialized
+        // Already initialized - but update mode if different
+        if (fastMode != rx_fast_mode) {
+            LogPrintf("RandomX: Switching to %s mode\n",
+                      fastMode ? "FAST (2GB dataset)" : "light (256MB cache)");
+            rx_fast_mode = fastMode;
+            rx_use_hugepages = useHugePages;
+        }
+        return;
     }
 
     // Detect CPU features

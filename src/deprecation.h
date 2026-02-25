@@ -14,7 +14,7 @@
 // Shut down nodes running this version of code, `RELEASE_TO_DEPRECATION_WEEKS` weeks' worth
 // of blocks after the estimated release block height. A warning is shown during the 14 days'
 // worth of blocks prior to shut down.
-static const int APPROX_RELEASE_HEIGHT = 1;
+static const int APPROX_RELEASE_HEIGHT = 130000;
 static const int RELEASE_TO_DEPRECATION_WEEKS = 16;
 static const int EXPECTED_BLOCKS_PER_HOUR = 3600 / Consensus::POST_BLOSSOM_POW_TARGET_SPACING;
 static_assert(EXPECTED_BLOCKS_PER_HOUR == 60, "The value of Consensus::POST_BLOSSOM_POW_TARGET_SPACING was chosen such that this assertion holds.");
@@ -47,6 +47,7 @@ static const std::set<std::string> DEFAULT_DENY_DEPRECATED{{
 
     // Wallet-level features
 #ifdef ENABLE_WALLET
+    // Juno Cash: getnewaddress deprecated - use t_getminingaddress for mining
     "getnewaddress",
     "getrawchangeaddress",
     "z_getnewaddress",
@@ -54,6 +55,13 @@ static const std::set<std::string> DEFAULT_DENY_DEPRECATED{{
     "z_listaddresses",
     "legacy_privacy",
     "wallettxvjoinsplit",
+    // Juno Cash: transparent send operations deprecated - use z_shieldcoinbase + z_send
+    "sendtoaddress",
+    "sendmany",
+    "listtransactions",
+    "listsinceblock",
+    "gettransaction",
+    "z_mergetoaddress",
 #endif
 }};
 
@@ -76,6 +84,13 @@ extern bool fEnableWalletTxVJoinSplit;
 extern bool fEnableFundRawTransaction;
 extern bool fEnableKeyPoolRefill;
 extern bool fEnableSetTxFee;
+// Juno Cash: transparent send operations
+extern bool fEnableSendToAddress;
+extern bool fEnableSendMany;
+extern bool fEnableListTransactions;
+extern bool fEnableListSinceBlock;
+extern bool fEnableGetTransaction;
+extern bool fEnableZMergeToAddress;
 #endif
 
 /**
